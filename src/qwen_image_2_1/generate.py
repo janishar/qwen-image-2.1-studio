@@ -2,25 +2,28 @@
 
 Usage:
     uv run python -m qwen_image_2_1.generate "A neon shop sign that reads QWEN"
-    uv run python -m qwen_image_2_1.generate "Edit: change background to sunset" --input photo.png
-    uv run python -m qwen_image_2_1.generate "RGBA sticker of a dragon" --transparent
+    uv run python -m qwen_image_2_1.generate "Edit: sunset" --input photo.png
+    uv run python -m qwen_image_2_1.generate "Dragon sticker" --transparent
+    uv run qwen-image-2-1 "Prompt" -m ~/models/Qwen-Image-2.1
+    QWEN_IMAGE_21_PATH=~/models/Qwen-Image-2.1 uv run qwen-image-2-1 "Prompt"
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import torch
 from PIL import Image
 
 
-def load_pipe(device: str = "mps", dtype: torch.dtype = torch.bfloat16):
+def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat16):
     from diffusers import QwenImage21Pipeline  # type: ignore[import-not-found]
 
-    return QwenImage21Pipeline.from_pretrained(
-        "Qwen/Qwen-Image-2.1", torch_dtype=dtype
-    ).to(device)
+    # Not device_map=device: diffusers calls torch.mps.empty_cache() after loading, which deadlocks
+    # on the GIL while MPS weight copies are still in flight (torch 2.14)
+    return QwenImage21Pipeline.from_pretrained(model, dtype=dtype).to(device)
 
 
 ASPECT_RATIOS = {
@@ -38,15 +41,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Qwen-Image-2.1 generation on MPS")
     parser.add_argument("prompt", help="Text prompt")
     parser.add_argument("--input", help="Input image(s) for editing, comma-separated")
-    parser.add_argument("--ratio", choices=ASPECT_RATIOS, default="1:1")
+    parser.add_argument("--ratio", choices=ASPECT_RATIOS,
+                        help="Output aspect ratio (default: 1:1, or the input image's aspect with --input)")
+    parser.add_argument("--width", type=int, help="Override width (multiple of 32)")
+    parser.add_argument("--height", type=int, help="Override height (multiple of 32)")
     parser.add_argument("--steps", type=int, default=40)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--transparent", action="store_true",
                         help="Generate an RGBA transparent image")
-    parser.add_argument("--output", default="output.png")
+    parser.add_argument("-m", "--model", type=os.path.expanduser,
+                        default=os.environ.get("QWEN_IMAGE_21_PATH") or "Qwen/Qwen-Image-2.1",
+                        help="Local path or HF repo ID (default: %(default)s, set via QWEN_IMAGE_21_PATH)")
+    parser.add_argument("--output", default="output/output.png")
     args = parser.parse_args()
 
-    width, height = ASPECT_RATIOS[args.ratio]
+    # ponytail: a relative "dir/name" path looks like a Hub ID, so only absolute, dotted or multi-segment paths are checked
+    if not os.path.isdir(args.model) and (args.model.startswith((".", "/")) or args.model.count("/") != 1):
+        parser.error(f"model directory not found: {args.model}")
+    if not torch.backends.mps.is_available():
+        parser.error("MPS is not available; this needs Apple Silicon and an MPS-enabled torch build")
+
+    ratio = args.ratio or (None if args.input else "1:1")
+    width, height = ASPECT_RATIOS[ratio] if ratio else (None, None)
+    width, height = args.width or width, args.height or height
     prompt = args.prompt
     if args.transparent:
         prompt = (
@@ -54,12 +71,14 @@ def main() -> None:
             f"{prompt} The image has alpha channel and the background is transparent."
         )
 
-    images = None
+    images: list[Image.Image] | None = None
     if args.input:
-        images = [Image.open(p) for p in args.input.split(",")]
+        images = [Image.open(p.strip()) for p in args.input.split(",")]
 
-    # bf16 on MPS: run denoising in fp16/fp32 fallback if a layer errors
-    pipe = load_pipe(device="mps", dtype=torch.bfloat16)
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pipe = load_pipe(args.model)
 
     out = pipe(
         prompt=prompt,
@@ -68,10 +87,14 @@ def main() -> None:
         height=height,
         num_inference_steps=args.steps,
         generator=torch.Generator(device="cpu").manual_seed(args.seed),
-    ).images[0]
+    ).images[0]  # pyright: ignore[reportAttributeAccessIssue]
 
-    out_path = Path(args.output)
-    out.save(out_path)
+    try:
+        out.save(out_path)
+    except (OSError, ValueError) as e:  # e.g. RGBA as JPEG, unknown extension: keep the render as PNG
+        out_path = out_path.with_suffix(".png")
+        print(f"Could not save {args.output} ({e}); saving PNG instead")
+        out.save(out_path)
     print(f"Saved {out_path.resolve()} ({out.size[0]}x{out.size[1]}, mode={out.mode})")
 
 
