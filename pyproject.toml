@@ -1,0 +1,26 @@
+[project]
+name = "qwen-image-2-1"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Janishar Ali", email = "janishar.ali@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.15.0",
+    "diffusers",
+    "pillow>=12.3.0",
+    "torch>=2.14.0",
+    "transformers>=5.17.0",
+]
+
+[project.scripts]
+qwen-image-2-1 = "qwen_image_2_1:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+diffusers = { git = "https://github.com/huggingface/diffusers" }
