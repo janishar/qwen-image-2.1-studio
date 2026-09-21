@@ -21,9 +21,18 @@ from PIL import Image
 def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat16):
     from diffusers import QwenImage21Pipeline  # type: ignore[import-not-found]
 
-    # Not device_map=device: diffusers calls torch.mps.empty_cache() after loading, which deadlocks
-    # on the GIL while MPS weight copies are still in flight (torch 2.14)
-    return QwenImage21Pipeline.from_pretrained(model, dtype=dtype).to(device)
+    # torch 2.14: mps.empty_cache() waits on the GPU while holding the GIL, but finishing the
+    # non_blocking weight copies device_map makes needs the GIL -> deadlock. synchronize() releases it.
+    # ponytail: global monkeypatch, drop once torch's empty_cache releases the GIL itself
+    empty_cache = torch.mps.empty_cache
+
+    def safe_empty_cache() -> None:
+        torch.mps.synchronize()
+        empty_cache()
+
+    torch.mps.empty_cache = safe_empty_cache
+    # device_map loads each weight straight to the GPU instead of building a full CPU copy first
+    return QwenImage21Pipeline.from_pretrained(model, dtype=dtype, device_map=device)
 
 
 ASPECT_RATIOS = {
