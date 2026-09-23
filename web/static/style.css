@@ -79,6 +79,9 @@ textarea { resize: vertical; min-height: 112px; }
 .model .glyph { grid-row: span 2; width: 30px; height: 30px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
 .model b { font-weight: 600; }
 .model code { font: 400 11px/15px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.device-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.device-row .label { margin: 0; }
+.device-row select { flex: 1; min-width: 0; }
 .bad { font: 600 10px/14px var(--sans); text-transform: uppercase; color: var(--danger); border: 1px solid var(--danger); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
 
 .mode { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }

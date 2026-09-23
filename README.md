@@ -35,3 +35,10 @@ The enhancer is freed before the image model loads. Pass `--pe-model` to point a
 QWEN_MODELS=~/models bash web/run.sh
 ```
 `QWEN_MODELS` is the directory holding `Qwen-Image-2.1`, `Qwen-Image-2.1-PE-T2I` and `Qwen-Image-2.1-PE-I2I`. The studio drives the CLI through its `@stage`, `@step` and `@enhanced` output lines.
+
+## Device
+
+Runs on Apple Silicon (MPS) by default. `--device` picks another: `auto` (the default: MPS, else CUDA, else CPU), `mps`, `cuda` or `cpu`, or set `QWEN_IMAGE_21_DEVICE` once. CPU works but is very slow. The studio has the same choice under Model.
+```bash
+uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
+```

@@ -39,6 +39,15 @@ import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(
           <b>Qwen-Image-2.1 <span class="bad" id="modelBad" hidden>not found</span></b>
           <code id="modelPath">—</code>
         </div>
+        <div class="device-row">
+          <label class="label" for="device">Device</label>
+          <select id="device">
+            <option value="auto">Auto — MPS, else CUDA, else CPU</option>
+            <option value="mps">MPS (Apple Silicon)</option>
+            <option value="cuda">CUDA (NVIDIA)</option>
+            <option value="cpu">CPU (slow)</option>
+          </select>
+        </div>
       </section>
 
       <section>

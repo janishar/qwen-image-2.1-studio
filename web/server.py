@@ -46,6 +46,8 @@ STATIC_DIR = WEB_DIR / "static"
 
 #: The CLI's --ratio choices (qwen_image_2_1.generate.ASPECT_RATIOS).
 RATIOS = {"1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"}
+#: The CLI's --device choices (qwen_image_2_1.generate.DEVICES).
+DEVICES = {"auto", "mps", "cuda", "cpu"}
 MAX_INPUTS = 10
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -538,7 +540,10 @@ def clean_settings(req: dict[str, Any]) -> dict[str, Any]:
     ratio = req.get("ratio") or None
     if ratio is not None and ratio not in RATIOS:
         raise ValueError(f"unknown aspect ratio {ratio}")
-    settings: dict[str, Any] = {"prompt": prompt, "ratio": ratio}
+    device = req.get("device") or "auto"
+    if device not in DEVICES:
+        raise ValueError(f"unknown device {device}")
+    settings: dict[str, Any] = {"prompt": prompt, "ratio": ratio, "device": device}
     for key in ("width", "height"):
         if req.get(key) not in (None, ""):
             value = as_int(req[key], key, 256, 4096)
@@ -613,7 +618,8 @@ class Runner:
         output.parent.mkdir(parents=True, exist_ok=True)
         prompt = resolve_mentions(settings["prompt"], [i["name"] for i in inputs])
         argv = [prompt, "-m", os.path.expanduser(state.paths["model"]), "--output", str(output),
-                "--steps", str(settings["steps"]), "--seed", str(settings["seed"])]  # fmt: skip
+                "--steps", str(settings["steps"]), "--seed", str(settings["seed"]),
+                "--device", settings["device"]]  # fmt: skip
         if settings["ratio"]:
             argv += ["--ratio", settings["ratio"]]
         for key in ("width", "height"):

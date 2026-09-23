@@ -11,7 +11,7 @@ const RATIOS = {
 const STAGES = [
   ["enhance", "Enhance"], ["load", "Load"], ["denoise", "Denoise"], ["decode", "Decode"], ["save", "Save"],
 ];
-const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent"];
+const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent", "device"];
 
 const ui = {
   session: "", paths: {}, ratio: null, inputs: [], takes: [], queue: [],
@@ -87,6 +87,7 @@ function settings() {
     prompt: $("prompt").value, ratio: ui.ratio, width: num("width"), height: num("height"),
     steps: num("steps") ?? 40, seed: num("seed") ?? 42,
     enhance: $("enhance").checked, think: $("think").checked, transparent: $("transparent").checked,
+    device: $("device").value,
   };
 }
 
@@ -97,6 +98,7 @@ function applySettings(s) {
   $("steps").value = s.steps ?? 40;
   $("seed").value = s.seed ?? 42;
   for (const flag of ["enhance", "think", "transparent"]) $(flag).checked = !!s[flag];
+  $("device").value = s.device || "auto";
   ui.ratio = s.ratio || null;
   update();
 }
@@ -177,6 +179,7 @@ function renderCommand() {
   if (s.enhance) parts.push("--enhance");
   if (s.enhance && s.think) parts.push("--think");
   if (s.transparent) parts.push("--transparent");
+  if (s.device !== "auto") parts.push(`--device ${s.device}`);
   $("cmd").innerHTML = parts.join(" \\\n  ");
 }
 
@@ -419,7 +422,7 @@ function renderPipeline() {
       cls = "now";
       width = key === "denoise" && job.progress.total ? (100 * job.progress.step) / job.progress.total : 35;
     }
-    const sub = { enhance: ui.inputs.length ? "PE-I2I 9B" : "PE-T2I 9B", load: "bf16 · MPS", denoise: `${steps} steps`, decode: "VAE", save: "PNG" }[key];
+    const sub = { enhance: ui.inputs.length ? "PE-I2I 9B" : "PE-T2I 9B", load: `bf16 · ${($("device").value === "auto" ? "auto" : $("device").value).toUpperCase()}`, denoise: `${steps} steps`, decode: "VAE", save: "PNG" }[key];
     return el("div", { class: `stepc ${cls}` },
       el("div", { class: "bar" }, el("i", { style: width === null ? null : `width:${width}%` })), name, el("small", { text: sub }));
   }));

@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from qwen_image_2_1.generate import ASPECT_RATIOS
+from qwen_image_2_1.generate import ASPECT_RATIOS, empty_cache
 
 
 def nearest_ratio(w: float, h: float) -> str:
@@ -30,8 +30,9 @@ def enhance(
     model_path: str,
     seed: int,
     think: bool = False,
+    device: str = "mps",
 ) -> tuple[str, str | None]:
-    """Return (rewritten prompt, ASPECT_RATIOS key or None). Loads the PE on MPS and frees it before returning."""
+    """Return (rewritten prompt, ASPECT_RATIOS key or None). Loads the PE on `device` and frees it before returning."""
     from transformers import (
         AutoModelForCausalLM,
         AutoModelForImageTextToText,
@@ -53,7 +54,7 @@ def enhance(
     if images is None:
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoModelForCausalLM.from_pretrained(
-            model_path, dtype=torch.bfloat16, device_map="mps"
+            model_path, dtype=torch.bfloat16, device_map=device
         ).eval()
         text = tokenizer.apply_chat_template(
             [
@@ -70,7 +71,7 @@ def enhance(
         processor = AutoProcessor.from_pretrained(model_path)
         tokenizer = processor.tokenizer
         model = AutoModelForImageTextToText.from_pretrained(
-            model_path, dtype=torch.bfloat16, device_map="mps"
+            model_path, dtype=torch.bfloat16, device_map=device
         ).eval()
         content = [{"type": "image", "image": img.convert("RGB")} for img in images]
         messages = [
@@ -95,7 +96,7 @@ def enhance(
             temperature=1.0,
             top_p=0.95,
             top_k=20,
-            # print the thinking + answer live, the rewrite takes minutes on MPS
+            # print the thinking + answer live, the rewrite takes minutes
             streamer=TextStreamer(
                 tokenizer, skip_prompt=True, skip_special_tokens=True
             ),
@@ -104,10 +105,10 @@ def enhance(
         out[0, inputs["input_ids"].shape[1] :], skip_special_tokens=True
     )
 
-    # the 9B PE and the image pipeline don't fit in unified memory together
+    # the 9B PE and the image pipeline don't fit in memory together
     del model, inputs, out
     gc.collect()
-    torch.mps.empty_cache()
+    empty_cache(device)
 
     try:
         result = json.loads(gen.rpartition("</think>")[2].strip())

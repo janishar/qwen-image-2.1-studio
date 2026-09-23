@@ -1,4 +1,4 @@
-"""Generate / edit images with Qwen-Image-2.1 on Apple Silicon (MPS).
+"""Generate / edit images with Qwen-Image-2.1 on Apple Silicon (MPS), CUDA or CPU.
 
 Usage:
     uv run python -m qwen_image_2_1.generate "A neon shop sign that reads QWEN"
@@ -8,6 +8,7 @@ Usage:
     QWEN_IMAGE_21_PATH=~/models/Qwen-Image-2.1 uv run qwen-image-2-1 "Prompt"
     uv run qwen-image-2-1 "a corgi playing guitar in the rain" --enhance
     uv run qwen-image-2-1 "make the sky sunset" --input photo.png --enhance
+    uv run qwen-image-2-1 "Prompt" --device cuda
 """
 
 from __future__ import annotations
@@ -32,6 +33,31 @@ def patch_mps_empty_cache() -> None:
         empty_cache()
 
     torch.mps.empty_cache = safe_empty_cache
+
+
+DEVICES = ("auto", "mps", "cuda", "cpu")
+
+
+def pick_device(requested: str) -> str:
+    """The torch device to run on: the one asked for, or with "auto" the first of MPS, CUDA, CPU present."""
+    available = {
+        "mps": torch.backends.mps.is_available(),
+        "cuda": torch.cuda.is_available(),
+        "cpu": True,
+    }
+    if requested == "auto":
+        return next(d for d, ok in available.items() if ok)
+    if not available[requested]:
+        raise ValueError(f"{requested.upper()} is not available in this torch build")
+    return requested
+
+
+def empty_cache(device: str) -> None:
+    """Hand freed memory back to the device, so the next model has room."""
+    if device == "mps":
+        torch.mps.empty_cache()
+    elif device == "cuda":
+        torch.cuda.empty_cache()
 
 
 def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat16):
@@ -66,7 +92,7 @@ ASPECT_RATIOS = {
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Qwen-Image-2.1 generation on MPS")
+    parser = argparse.ArgumentParser(description="Qwen-Image-2.1 generation")
     parser.add_argument("prompt", help="Text prompt")
     parser.add_argument("--input", help="Input image(s) for editing, comma-separated")
     parser.add_argument(
@@ -104,6 +130,12 @@ def main() -> None:
         help="Prompt enhancer path or HF repo ID (default: QWEN_IMAGE_21_PE_T2I_PATH / "
         "QWEN_IMAGE_21_PE_I2I_PATH, else Qwen/Qwen-Image-2.1-PE-T2I / -PE-I2I)",
     )
+    parser.add_argument(
+        "--device",
+        choices=DEVICES,
+        default=os.environ.get("QWEN_IMAGE_21_DEVICE") or "auto",
+        help="Where to run (default: %(default)s = MPS, else CUDA, else CPU; set via QWEN_IMAGE_21_DEVICE)",
+    )
     parser.add_argument("--output", default="output/output.png")
     args = parser.parse_args()
 
@@ -119,10 +151,11 @@ def main() -> None:
             model.startswith((".", "/")) or model.count("/") != 1
         ):
             parser.error(f"model directory not found: {model}")
-    if not torch.backends.mps.is_available():
-        parser.error(
-            "MPS is not available; this needs Apple Silicon and an MPS-enabled torch build"
-        )
+    try:
+        device = pick_device(args.device)
+    except ValueError as e:
+        parser.error(str(e))
+    print(f"Device: {device}", flush=True)
 
     images: list[Image.Image] | None = None
     if args.input:
@@ -133,14 +166,17 @@ def main() -> None:
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    patch_mps_empty_cache()
+    if device == "mps":
+        patch_mps_empty_cache()
 
     prompt, pe_ratio = args.prompt, None
     if args.enhance:
         from qwen_image_2_1.enhance import enhance
 
         stage("enhance")
-        prompt, pe_ratio = enhance(prompt, images, pe_model, args.seed, args.think)
+        prompt, pe_ratio = enhance(
+            prompt, images, pe_model, args.seed, args.think, device
+        )
         print(f"Enhanced prompt ({pe_ratio or 'ratio from input'}):\n{prompt}\n")
         print(
             f"@enhanced {json.dumps({'prompt': prompt, 'ratio': pe_ratio})}", flush=True
@@ -156,7 +192,7 @@ def main() -> None:
         )
 
     stage("load")
-    pipe = load_pipe(args.model)
+    pipe = load_pipe(args.model, device)
 
     stage("denoise")
 

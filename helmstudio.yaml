@@ -15,7 +15,7 @@ requires:
   ram_gb: 64
 runtime:
   framework: pytorch
-  backends: [mps]
+  backends: [mps, cuda, cpu]
   precision: [bf16]
   language: python
 # Sessions keep their settings and reference images (kv for the page's paths);
