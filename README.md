@@ -18,6 +18,10 @@ it shares with the other studios. The CLI needs none of that.
 [![Platform](https://img.shields.io/badge/platform-macOS%20%28Apple%20Silicon%29-lightgrey?logo=apple)](#requirements)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license)
 
+<p align="center">
+  <img src="docs/screenshot-1.webp" alt="qwen image studio running inside helmstudio: an edit of a portrait with the prompt 'make hair in @take… blue', the enhancer on, a 3:2 ratio at 1280×896, seed 42 and 40 steps on the left; the edited take with blue hair in the centre preview, its five render stages and the enhanced prompt beneath; the reference image, the queue and the terminal's output on the right, with the session's two takes at the bottom" width="90%">
+</p>
+
 ## Table of contents
 
 - [Requirements](#requirements) · [Weights](#weights)
