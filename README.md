@@ -21,13 +21,13 @@ it shares with the other studios. The CLI needs none of that.
 ## Table of contents
 
 - [Requirements](#requirements) · [Weights](#weights)
-- [Command line](#command-line) — [Prompt enhancer](#prompt-enhancer) ·
-  [Editing](#editing-with-reference-images) · [Device](#device) ·
-  [Flags](#cli-reference) · [Environment variables](#environment-variables)
 - [The studio](#the-studio) — [Path A: the launcher](#path-a-install-from-the-launcher-recommended) ·
   [Path B: a checkout](#path-b-run-from-a-checkout) ·
   [Using it](#using-the-studio) · [What helmstudio adds](#what-helmstudio-adds) ·
   [Sessions and state](#sessions-and-state)
+- [Command line](#command-line) — [Prompt enhancer](#prompt-enhancer) ·
+  [Editing](#editing-with-reference-images) · [Device](#device) ·
+  [Flags](#cli-reference) · [Environment variables](#environment-variables)
 - [Security](#security) · [Limits](#limits) · [Contributing](#contributing) ·
   [License](#license)
 
@@ -75,96 +75,6 @@ hf download Qwen/Qwen-Image-2.1-PE-I2I --local-dir ~/models/Qwen-Image-2.1-PE-I2
 
 Without a local copy the CLI downloads from the Hub into the HF cache. Installed
 through the launcher, helmstudio downloads all three itself.
-
-## Command line
-
-```bash
-uv run qwen-image-2-1 "A neon shop sign that reads QWEN" -m ~/models/Qwen-Image-2.1
-```
-
-Or `export QWEN_IMAGE_21_PATH=~/models/Qwen-Image-2.1` once and drop `-m`. The
-take is written to `output/output.png`; `--output` puts it elsewhere, and a
-format that cannot hold the image (RGBA as JPEG) falls back to PNG.
-
-```bash
-uv run qwen-image-2-1 "Dragon sticker, die-cut" --transparent       # RGBA, transparent background
-uv run qwen-image-2-1 "Swiss poster, 'QWEN 2.1'" --ratio 3:4 --seed 7
-uv run qwen-image-2-1 "A bookshelf in warm oak" --width 1024 --height 768 --steps 30
-```
-
-Sizes come from the aspect ratio, at about 4 MP: `1:1` is 2048×2048, `16:9`
-2752×1536, and so on through `4:3`, `3:4`, `3:2`, `2:3` and `9:16`. `--width` and
-`--height` override either side and must be multiples of 32.
-
-### Prompt enhancer
-
-`--enhance` first rewrites the prompt with a 9B enhancer and lets it choose the
-aspect ratio: PE-T2I for text-to-image, PE-I2I when `--input` is given.
-`--ratio`, `--width` and `--height` still win. `--think` lets it reason first,
-which is slower, often by minutes.
-
-```bash
-export QWEN_IMAGE_21_PE_T2I_PATH=~/models/Qwen-Image-2.1-PE-T2I
-export QWEN_IMAGE_21_PE_I2I_PATH=~/models/Qwen-Image-2.1-PE-I2I
-uv run qwen-image-2-1 "a corgi playing guitar in the rain" --enhance
-```
-
-The enhancer is freed before the image model loads. `--pe-model` points at a
-specific enhancer instead of the environment's.
-
-### Editing with reference images
-
-`--input` takes up to 10 images, comma-separated, and makes the render an edit.
-The prompt names them `<image1>`, `<image2>`, … in that order. With no ratio set,
-the output follows the **last** image's aspect at about 1 MP.
-
-```bash
-uv run qwen-image-2-1 "put the mug from <image1> under the neon sign from <image2>" \
-  --input mug.jpg,neon-sign.png --enhance
-```
-
-### Device
-
-`--device auto` (the default) runs on MPS, else CUDA, else CPU. `mps`, `cuda` and
-`cpu` pick one, and asking for one this torch build lacks fails at once. On MPS
-the weights load straight onto the GPU, and the MPS cache is emptied after the
-enhancer with a workaround for a torch 2.14 deadlock. CPU works but is very slow
-for a model this size.
-
-```bash
-uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
-```
-
-### CLI reference
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `prompt` | *(required)* | The text prompt. |
-| `--input` | *(none)* | Reference images for editing, comma-separated, at most 10. |
-| `--ratio` | `1:1`, or the last input's aspect | `1:1`, `4:3`, `3:4`, `3:2`, `2:3`, `16:9`, `9:16`. |
-| `--width`, `--height` | from the ratio | Override one side; a multiple of 32. |
-| `--steps` | `40` | Denoising steps. |
-| `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. |
-| `--transparent` | off | Ask for an RGBA image with a transparent background. |
-| `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id. |
-| `--enhance` | off | Rewrite the prompt, and choose the ratio, with PE-T2I / PE-I2I first. |
-| `--think` | off | With `--enhance`: let the enhancer reason before answering. |
-| `--pe-model` | `$QWEN_IMAGE_21_PE_{T2I,I2I}_PATH`, else the Hub | Enhancer directory or Hub id. |
-| `--device` | `$QWEN_IMAGE_21_DEVICE`, else `auto` | `auto`, `mps`, `cuda` or `cpu`. |
-| `--output` | `output/output.png` | Where the take is written. |
-
-Besides its human-readable output the CLI prints one line per event for the
-studio to read: `@stage enhance|load|denoise|decode|save`, `@step 12/40`, and
-`@enhanced {"prompt": …, "ratio": …}`.
-
-### Environment variables
-
-| Variable | Used as |
-| --- | --- |
-| `QWEN_IMAGE_21_PATH` | `--model` |
-| `QWEN_IMAGE_21_PE_T2I_PATH`, `QWEN_IMAGE_21_PE_I2I_PATH` | `--pe-model`, by mode |
-| `QWEN_IMAGE_21_DEVICE` | `--device` |
-| `QWEN_MODELS` | `web/run.sh`: the directory holding the three weights |
 
 ## The studio
 
@@ -270,6 +180,96 @@ The studio keeps nothing of its own; helmstudio keeps it all:
 
 For an installed studio that is `~/.helmstudio`; for a checkout under `helm dev`
 it is `./.helm`. Nothing is written into the repository.
+
+## Command line
+
+```bash
+uv run qwen-image-2-1 "A neon shop sign that reads QWEN" -m ~/models/Qwen-Image-2.1
+```
+
+Or `export QWEN_IMAGE_21_PATH=~/models/Qwen-Image-2.1` once and drop `-m`. The
+take is written to `output/output.png`; `--output` puts it elsewhere, and a
+format that cannot hold the image (RGBA as JPEG) falls back to PNG.
+
+```bash
+uv run qwen-image-2-1 "Dragon sticker, die-cut" --transparent       # RGBA, transparent background
+uv run qwen-image-2-1 "Swiss poster, 'QWEN 2.1'" --ratio 3:4 --seed 7
+uv run qwen-image-2-1 "A bookshelf in warm oak" --width 1024 --height 768 --steps 30
+```
+
+Sizes come from the aspect ratio, at about 4 MP: `1:1` is 2048×2048, `16:9`
+2752×1536, and so on through `4:3`, `3:4`, `3:2`, `2:3` and `9:16`. `--width` and
+`--height` override either side and must be multiples of 32.
+
+### Prompt enhancer
+
+`--enhance` first rewrites the prompt with a 9B enhancer and lets it choose the
+aspect ratio: PE-T2I for text-to-image, PE-I2I when `--input` is given.
+`--ratio`, `--width` and `--height` still win. `--think` lets it reason first,
+which is slower, often by minutes.
+
+```bash
+export QWEN_IMAGE_21_PE_T2I_PATH=~/models/Qwen-Image-2.1-PE-T2I
+export QWEN_IMAGE_21_PE_I2I_PATH=~/models/Qwen-Image-2.1-PE-I2I
+uv run qwen-image-2-1 "a corgi playing guitar in the rain" --enhance
+```
+
+The enhancer is freed before the image model loads. `--pe-model` points at a
+specific enhancer instead of the environment's.
+
+### Editing with reference images
+
+`--input` takes up to 10 images, comma-separated, and makes the render an edit.
+The prompt names them `<image1>`, `<image2>`, … in that order. With no ratio set,
+the output follows the **last** image's aspect at about 1 MP.
+
+```bash
+uv run qwen-image-2-1 "put the mug from <image1> under the neon sign from <image2>" \
+  --input mug.jpg,neon-sign.png --enhance
+```
+
+### Device
+
+`--device auto` (the default) runs on MPS, else CUDA, else CPU. `mps`, `cuda` and
+`cpu` pick one, and asking for one this torch build lacks fails at once. On MPS
+the weights load straight onto the GPU, and the MPS cache is emptied after the
+enhancer with a workaround for a torch 2.14 deadlock. CPU works but is very slow
+for a model this size.
+
+```bash
+uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
+```
+
+### CLI reference
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `prompt` | *(required)* | The text prompt. |
+| `--input` | *(none)* | Reference images for editing, comma-separated, at most 10. |
+| `--ratio` | `1:1`, or the last input's aspect | `1:1`, `4:3`, `3:4`, `3:2`, `2:3`, `16:9`, `9:16`. |
+| `--width`, `--height` | from the ratio | Override one side; a multiple of 32. |
+| `--steps` | `40` | Denoising steps. |
+| `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. |
+| `--transparent` | off | Ask for an RGBA image with a transparent background. |
+| `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id. |
+| `--enhance` | off | Rewrite the prompt, and choose the ratio, with PE-T2I / PE-I2I first. |
+| `--think` | off | With `--enhance`: let the enhancer reason before answering. |
+| `--pe-model` | `$QWEN_IMAGE_21_PE_{T2I,I2I}_PATH`, else the Hub | Enhancer directory or Hub id. |
+| `--device` | `$QWEN_IMAGE_21_DEVICE`, else `auto` | `auto`, `mps`, `cuda` or `cpu`. |
+| `--output` | `output/output.png` | Where the take is written. |
+
+Besides its human-readable output the CLI prints one line per event for the
+studio to read: `@stage enhance|load|denoise|decode|save`, `@step 12/40`, and
+`@enhanced {"prompt": …, "ratio": …}`.
+
+### Environment variables
+
+| Variable | Used as |
+| --- | --- |
+| `QWEN_IMAGE_21_PATH` | `--model` |
+| `QWEN_IMAGE_21_PE_T2I_PATH`, `QWEN_IMAGE_21_PE_I2I_PATH` | `--pe-model`, by mode |
+| `QWEN_IMAGE_21_DEVICE` | `--device` |
+| `QWEN_MODELS` | `web/run.sh`: the directory holding the three weights |
 
 ## Security
 
