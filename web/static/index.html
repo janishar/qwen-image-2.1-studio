@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qwen image studio</title>
+<!-- helm-css's tokens, this studio's hue for each theme, and the Plex faces, through the proxy -->
+<link rel="stylesheet" href="/helm/sdk/v1/helm-tokens.css">
+<link rel="stylesheet" href="/helm/accent.css">
+<link rel="stylesheet" href="/static/style.css">
+<script type="module">
+import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(() => {});
+</script>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">qwen image <span>studio</span></div>
+    <div class="row">
+      <select id="sessionSelect" aria-label="Session"></select>
+      <button class="btn" type="button" id="sessionNew">+ New</button>
+      <button class="btn" type="button" id="sessionDup">⧉ Duplicate</button>
+      <button class="btn danger-text" type="button" id="sessionDel">Delete</button>
+    </div>
+    <div class="row">
+      <button class="btn" type="button" id="galleryBtn" hidden>Gallery</button>
+      <button class="btn" type="button" id="pathsBtn">⚙ Paths</button>
+    </div>
+    <div class="status"><span class="dot" id="lamp"></span><span id="lampText">connecting…</span></div>
+  </header>
+
+  <div class="layout">
+    <!-- LEFT: parameters -->
+    <aside class="panel" aria-label="Parameters">
+      <section>
+        <div class="label">Model</div>
+        <div class="model">
+          <div class="glyph">2.1</div>
+          <b>Qwen-Image-2.1 <span class="bad" id="modelBad" hidden>not found</span></b>
+          <code id="modelPath">—</code>
+        </div>
+      </section>
+
+      <section>
+        <div class="label">Mode <span class="right muted">set by reference images</span></div>
+        <div class="mode" id="modeSeg"><span data-m="t2i">Text → image</span><span data-m="i2i">Edit</span></div>
+      </section>
+
+      <section>
+        <label class="label" for="prompt">Prompt <span class="right muted" id="promptCount"></span></label>
+        <div class="mention-wrap">
+          <textarea id="prompt" placeholder="A neon shop sign that reads QWEN" aria-describedby="promptHint"></textarea>
+          <div class="mentions" id="mentions" role="listbox" aria-label="Reference images" hidden></div>
+        </div>
+        <p class="hint" id="promptHint">Type @ to name a reference image; it becomes &lt;image1&gt;, &lt;image2&gt;… in the order of the list.</p>
+      </section>
+
+      <section>
+        <div class="label">Prompt enhancer</div>
+        <label class="toggle" for="enhance">
+          <input type="checkbox" id="enhance">
+          <b>Enhance prompt <span class="tag" id="peTag">PE-T2I · 9B</span></b>
+          <em>Rewrites the prompt and picks the aspect ratio first. The enhancer is unloaded before the image model loads.</em>
+        </label>
+        <label class="toggle sub" for="think" id="thinkRow">
+          <input type="checkbox" id="think">
+          <b>Let it think</b>
+          <em>Reasons before answering. Slower, often by minutes on MPS.</em>
+        </label>
+      </section>
+
+      <section>
+        <div class="label">Aspect ratio <span class="right muted" id="ratioSrc"></span></div>
+        <div class="ratios" id="ratios"></div>
+        <div class="readout">
+          <span><b id="dims">—</b> px</span>
+          <span><b id="mp">—</b> MP</span>
+          <span>÷32 <b id="grid32">ok</b></span>
+        </div>
+      </section>
+
+      <section>
+        <div class="grid2">
+          <label for="width"><span class="label">Width</span><input type="number" id="width" step="32" min="256" max="4096" placeholder="auto"></label>
+          <label for="height"><span class="label">Height</span><input type="number" id="height" step="32" min="256" max="4096" placeholder="auto"></label>
+        </div>
+        <p class="hint">Overrides the ratio. Multiples of 32; leave empty to follow the ratio.</p>
+      </section>
+
+      <section class="grid2">
+        <label for="steps"><span class="label">Steps</span><input type="number" id="steps" value="40" min="1" max="200"></label>
+        <div>
+          <label class="label" for="seed">Seed</label>
+          <div class="seedrow"><input type="number" id="seed" value="42" min="0"><button class="iconbtn" type="button" id="dice" title="Random seed" aria-label="Random seed">⚄</button></div>
+        </div>
+      </section>
+
+      <section>
+        <label class="toggle" for="transparent">
+          <input type="checkbox" id="transparent">
+          <b>Transparent background <span class="tag">RGBA</span></b>
+          <em>Asks for an alpha channel; the take is always saved as PNG.</em>
+        </label>
+      </section>
+
+      <section>
+        <button class="primary" type="button" id="generate">Generate</button>
+        <p class="errors" id="formError" hidden></p>
+        <div class="cmd" id="cmd" aria-label="Equivalent command"></div>
+      </section>
+    </aside>
+
+    <!-- CENTRE: preview, enhanced prompt, takes -->
+    <main class="panel center" aria-label="Preview">
+      <section class="stage">
+        <div class="stagehead">
+          <span class="mono" id="stageTitle">No take yet</span>
+          <span class="chip" id="stageRatio" hidden></span>
+          <span class="spacer"></span>
+          <button class="btn sm" type="button" id="useTake" disabled>Use as reference</button>
+          <button class="btn sm" type="button" id="reuseTake" disabled>Reuse settings</button>
+          <a class="btn sm" id="openTake" target="_blank" rel="noopener" hidden>Open</a>
+        </div>
+        <div class="frame" id="frame">
+          <img id="frameImg" alt="" hidden>
+          <span class="empty" id="frameEmpty">Generate to see a take here</span>
+          <span class="badge" id="frameBadge" hidden></span>
+          <div class="live" id="frameLive" hidden></div>
+        </div>
+        <div class="pipeline" id="pipeline"></div>
+        <div class="progress-actions" id="progressActions" hidden>
+          <span class="muted mono" id="progressText"></span>
+          <button class="btn sm danger-text" type="button" id="cancel">Cancel</button>
+        </div>
+      </section>
+
+      <section class="enhanced" id="enhancedBox" hidden>
+        <div class="label">Enhanced prompt <span class="right"><span class="chip" id="peRatio" hidden></span> <button class="link" type="button" id="copyEnhanced">copy to prompt</button> <button class="link" type="button" id="expandEnhanced" aria-expanded="false" aria-controls="enhancedBody">expand</button></span></div>
+        <div class="enhanced-body" id="enhancedBody">
+          <p class="orig" id="origPrompt"></p>
+          <p id="enhancedPrompt"></p>
+        </div>
+      </section>
+
+      <section>
+        <div class="label">Takes <span class="muted" id="takeCount"></span></div>
+        <div class="takes" id="takes"></div>
+      </section>
+    </main>
+
+    <!-- RIGHT: references, queue, terminal -->
+    <aside class="panel side" aria-label="Inputs and activity">
+      <div class="side-scroll">
+        <section>
+          <div class="label">Reference images <span class="muted" id="refCount"></span><span class="right"><button class="link" type="button" id="refFromGallery" hidden>from gallery</button></span></div>
+          <label class="drop" id="drop" for="fileInput">Drop images here or click to add — up to 10. Adding one switches to Edit.</label>
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          <div class="refs" id="refs"></div>
+          <p class="hint">Numbered in prompt order. Click one to add it to the prompt as @name, sent as &lt;imageN&gt;. With no ratio set, the size follows the last image.</p>
+        </section>
+
+        <section>
+          <div class="label">Queue</div>
+          <div class="queue" id="queue"></div>
+        </section>
+      </div>
+
+      <section class="side-term">
+        <div class="label">Terminal
+          <span class="tabs" role="tablist" id="termTabs">
+            <button type="button" role="tab" aria-selected="true" data-tab="output">Output</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="render" hidden>Render log</button>
+          </span>
+          <span class="right"><button class="link" type="button" id="termClear">clear</button></span>
+        </div>
+        <pre class="term" id="term"></pre>
+        <div class="term render-log" id="renderLog" hidden></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<dialog id="pathsDialog">
+  <h3>Paths</h3>
+  <div class="field"><label class="label" for="pModel">Image model</label><input type="text" id="pModel" autocomplete="off"></div>
+  <div class="field"><label class="label" for="pT2I">Enhancer · text → image</label><input type="text" id="pT2I" autocomplete="off"></div>
+  <div class="field"><label class="label" for="pI2I">Enhancer · edit</label><input type="text" id="pI2I" autocomplete="off"></div>
+  <p class="hint">Directories on this Mac. helmstudio sets them from the weights it installed; a path here wins.</p>
+  <p class="errors" id="pathsError" hidden></p>
+  <div class="acts"><button class="btn" type="button" id="pathsCancel">Cancel</button><button class="primary" type="button" id="pathsSave">Use paths</button></div>
+</dialog>
+
+<dialog id="askDialog">
+  <h3 id="askTitle"></h3>
+  <p class="hint" id="askMessage"></p>
+  <input type="text" id="askInput" autocomplete="off">
+  <p class="errors" id="askError" hidden></p>
+  <div class="acts"><button class="btn" type="button" id="askCancel">Cancel</button><button class="primary" type="button" id="askOk">OK</button></div>
+</dialog>
+
+<dialog id="galleryDialog" class="gallery-dialog">
+  <div class="gallery-head"><h3 id="galleryTitle">Gallery</h3><span class="spacer"></span><button class="btn sm" type="button" id="galleryClose">Close</button></div>
+  <div id="galleryMount" class="gallery-mount"></div>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -38,6 +39,19 @@ def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat
 
     # device_map loads each weight straight to the GPU instead of building a full CPU copy first
     return QwenImage21Pipeline.from_pretrained(model, dtype=dtype, device_map=device)
+
+
+def stage(name: str) -> None:
+    # machine-readable marker for the studio UI: enhance, load, denoise, decode, save
+    print(f"@stage {name}", flush=True)
+
+
+def on_step_end(pipe, i: int, t, kwargs: dict) -> dict:
+    n = pipe._num_timesteps
+    print(f"@step {i + 1}/{n}", flush=True)
+    if i + 1 == n:  # the pipeline decodes the latents right after the last step
+        stage("decode")
+    return kwargs
 
 
 ASPECT_RATIOS = {
@@ -125,8 +139,12 @@ def main() -> None:
     if args.enhance:
         from qwen_image_2_1.enhance import enhance
 
+        stage("enhance")
         prompt, pe_ratio = enhance(prompt, images, pe_model, args.seed, args.think)
         print(f"Enhanced prompt ({pe_ratio or 'ratio from input'}):\n{prompt}\n")
+        print(
+            f"@enhanced {json.dumps({'prompt': prompt, 'ratio': pe_ratio})}", flush=True
+        )
 
     ratio = args.ratio or pe_ratio or (None if args.input else "1:1")
     width, height = ASPECT_RATIOS[ratio] if ratio else (None, None)
@@ -137,7 +155,10 @@ def main() -> None:
             f"{prompt} The image has alpha channel and the background is transparent."
         )
 
+    stage("load")
     pipe = load_pipe(args.model)
+
+    stage("denoise")
 
     out = pipe(
         prompt=prompt,
@@ -146,10 +167,12 @@ def main() -> None:
         height=height,
         num_inference_steps=args.steps,
         generator=torch.Generator(device="cpu").manual_seed(args.seed),
+        callback_on_step_end=on_step_end,
     ).images[
         0
     ]  # pyright: ignore[reportAttributeAccessIssue]
 
+    stage("save")
     try:
         out.save(out_path)
     except (

@@ -1,0 +1,52 @@
+# qwen image studio's manifest for helmstudio, beside the code it runs.
+id: qwen-image-studio
+name: qwen image studio
+description: Qwen-Image-2.1 text-to-image and multi-image editing on MPS, with the PE prompt enhancers.
+kinds: [image]
+hue: { dark: "#a98bff", light: "#6a45c9" }
+license: MIT
+repo: https://github.com/janishar/qwen-image-2.1-studio
+python: { version: "3.12" }
+peak_ram_gb: 60 # the image model in bf16; the 9B enhancer is freed before it loads
+requires:
+  os: [darwin]
+  arch: [arm64]
+  tools: [uv]
+  ram_gb: 64
+runtime:
+  framework: pytorch
+  backends: [mps]
+  precision: [bf16]
+  language: python
+# Sessions keep their settings and reference images (kv for the page's paths);
+# references and takes are assets; takes with their settings are gallery items;
+# renders with their logs are jobs. There is no timeline: this studio makes stills.
+capabilities: [kv, assets, gallery, jobs]
+sdk: { runtime: "^1", ui: "^1", css: "^1" }
+network: [huggingface.co, cdn-lfs.huggingface.co, github.com]
+build:
+  # --locked: install exactly uv.lock, and fail rather than rewrite it.
+  - name: Sync dependencies
+    run: uv sync --locked
+weights:
+  - name: qwen_image
+    repo: Qwen/Qwen-Image-2.1
+    dest: Qwen-Image-2.1
+    files: ["model_index.json", "processor/**", "scheduler/**", "text_encoder/**", "transformer/**", "vae/**"]
+  - name: pe_t2i
+    repo: Qwen/Qwen-Image-2.1-PE-T2I
+    dest: Qwen-Image-2.1-PE-T2I
+  - name: pe_i2i
+    repo: Qwen/Qwen-Image-2.1-PE-I2I
+    dest: Qwen-Image-2.1-PE-I2I
+processes:
+  - name: studio
+    role: main
+    heavy: true
+    cwd: web
+    # Not `uv run`, which would sync the environment at every launch.
+    cmd: "python server.py --host 127.0.0.1 --port {port} --model {models.qwen_image} --pe-t2i {models.pe_t2i} --pe-i2i {models.pe_i2i}"
+    port: { prefer: 8730 }
+    health: { tcp: true, timeout_s: 30, interval_s: 2 }
+    busy: { path: /api/queue }
+    ui: /

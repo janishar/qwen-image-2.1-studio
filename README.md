@@ -27,3 +27,11 @@ uv run qwen-image-2-1 "a corgi playing guitar in the rain" --enhance
 uv run qwen-image-2-1 "make the sky sunset" --input photo.png --enhance
 ```
 The enhancer is freed before the image model loads. Pass `--pe-model` to point at a specific enhancer instead.
+
+## Studio (web UI)
+
+`web/` is a helmstudio studio: every CLI option in a page, with sessions, reference images, a render queue, live progress and takes kept in helmstudio's gallery. Install it from helmstudio with `helmstudio.yaml`, or run it on its own under `helm dev` (data in `./.helm`):
+```bash
+QWEN_MODELS=~/models bash web/run.sh
+```
+`QWEN_MODELS` is the directory holding `Qwen-Image-2.1`, `Qwen-Image-2.1-PE-T2I` and `Qwen-Image-2.1-PE-I2I`. The studio drives the CLI through its `@stage`, `@step` and `@enhanced` output lines.

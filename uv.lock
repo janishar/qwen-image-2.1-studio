@@ -318,6 +318,15 @@ wheels = [
 ]
 
 [[package]]
+name = "helm-runtime-sdk"
+version = "1.0.0rc4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/04/3864da4432e821de7986f8dc091d7a9ec170b0ef837a1d3fe68d19d8af8a/helm_runtime_sdk-1.0.0rc4.tar.gz", hash = "sha256:acf9764f7af589faecdee673f9f54e6fe1280cb14bbf32043bf9a124fcbb62f6", size = 12208, upload-time = "2026-09-20T12:36:54.298Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/04/ff49b14d5d7f19e9b423e24ae8732dfa79af183486bdd95a215499666684/helm_runtime_sdk-1.0.0rc4-py3-none-any.whl", hash = "sha256:918abe96d7a097c007b407107a3bdaa33e4f2b31e4f90cea8ec07ce5b5611983", size = 13145, upload-time = "2026-09-20T12:36:53.051Z" },
+]
+
+[[package]]
 name = "hf-xet"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -919,6 +928,7 @@ source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "diffusers" },
+    { name = "helm-runtime-sdk" },
     { name = "pillow" },
     { name = "torch" },
     { name = "torchvision" },
@@ -929,6 +939,7 @@ dependencies = [
 requires-dist = [
     { name = "accelerate", specifier = ">=1.15.0" },
     { name = "diffusers", git = "https://github.com/huggingface/diffusers" },
+    { name = "helm-runtime-sdk", specifier = ">=1.0.0rc1,<2" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "torch", specifier = ">=2.14.0" },
     { name = "torchvision", specifier = ">=0.29.0" },

@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "accelerate>=1.15.0",
     "diffusers",
+    "helm-runtime-sdk>=1.0.0rc1,<2",
     "pillow>=12.3.0",
     "torch>=2.14.0",
     "torchvision>=0.29.0",

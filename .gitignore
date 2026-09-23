@@ -12,3 +12,6 @@ wheels/
 output
 
 .DS_Store
+# helm dev keeps what the studio stores here
+.helm
+.cache
