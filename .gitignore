@@ -15,3 +15,6 @@ output
 # helm dev keeps what the studio stores here
 .helm
 .cache
+
+# the Claude app's local launch config (machine-specific paths)
+.claude
