@@ -249,7 +249,7 @@ uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
 | `--ratio` | `1:1`, or the last input's aspect | `1:1`, `4:3`, `3:4`, `3:2`, `2:3`, `16:9`, `9:16`. |
 | `--width`, `--height` | from the ratio | Override one side; a multiple of 32. |
 | `--steps` | `40` | Denoising steps. |
-| `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. |
+| `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. For an edit it is mixed with the inputs' pixels, so editing a take with the seed it was made with does not start from the noise that made it. |
 | `--transparent` | off | Ask for an RGBA image with a transparent background. |
 | `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id. |
 | `--enhance` | off | Rewrite the prompt, and choose the ratio, with PE-T2I / PE-I2I first. |

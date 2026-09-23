@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -58,6 +59,22 @@ def empty_cache(device: str) -> None:
         torch.mps.empty_cache()
     elif device == "cuda":
         torch.cuda.empty_cache()
+
+
+def noise_seed(seed: int, images: list[Image.Image] | None) -> int:
+    """The seed for the starting noise: `seed` itself, or for an edit, `seed` mixed with the inputs' pixels.
+
+    Editing an image with the seed and size it was generated with would start from the exact noise that made it,
+    and the model then over-sharpens it into a crunchy, HDR-like texture instead of editing. Mixing in the inputs
+    gives an edit its own noise, while the same seed and inputs still reproduce the same take.
+    """
+    if not images:
+        return seed
+    digest = hashlib.sha256(str(seed).encode())
+    for img in images:
+        digest.update(f"{img.mode}{img.size}".encode())
+        digest.update(img.tobytes())
+    return int.from_bytes(digest.digest()[:8], "big") >> 1
 
 
 def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat16):
@@ -202,7 +219,9 @@ def main() -> None:
         width=width,
         height=height,
         num_inference_steps=args.steps,
-        generator=torch.Generator(device="cpu").manual_seed(args.seed),
+        generator=torch.Generator(device="cpu").manual_seed(
+            noise_seed(args.seed, images)
+        ),
         callback_on_step_end=on_step_end,
     ).images[
         0
