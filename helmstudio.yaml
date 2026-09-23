@@ -1,13 +1,16 @@
 # qwen image studio's manifest for helmstudio, beside the code it runs.
 id: qwen-image-studio
 name: qwen image studio
-description: Qwen-Image-2.1 text-to-image and multi-image editing on MPS, with the PE prompt enhancers.
+description: Qwen-Image-2.1 text-to-image and multi-image editing on PyTorch (mps), with the PE prompt enhancers.
 kinds: [image]
-hue: { dark: "#a98bff", light: "#6a45c9" }
+# Teal, at least 30° from helmstudio's accent and every other studio's hue (AuK is violet).
+hue: { dark: "#45c4b0", light: "#1a7f70" }
 license: MIT
 repo: https://github.com/janishar/qwen-image-2.1-studio
 python: { version: "3.12" }
-peak_ram_gb: 60 # the image model in bf16; the 9B enhancer is freed before it loads
+# An estimate, not measured: ~30 GB of bf16 weights (transformer 13, text encoder 16, VAE 1.3)
+# plus activations at 2048x2048. The 9B enhancer is freed before the image model loads.
+peak_ram_gb: 60
 requires:
   os: [darwin]
   arch: [arm64]
@@ -23,6 +26,7 @@ runtime:
 # renders with their logs are jobs. There is no timeline: this studio makes stills.
 capabilities: [kv, assets, gallery, jobs]
 sdk: { runtime: "^1", ui: "^1", css: "^1" }
+# github.com because uv.lock pins diffusers to its git main, for QwenImage21Pipeline.
 network: [huggingface.co, cdn-lfs.huggingface.co, github.com]
 build:
   # --locked: install exactly uv.lock, and fail rather than rewrite it.
@@ -32,13 +36,16 @@ weights:
   - name: qwen_image
     repo: Qwen/Qwen-Image-2.1
     dest: Qwen-Image-2.1
+    size_gb: 31
     files: ["model_index.json", "processor/**", "scheduler/**", "text_encoder/**", "transformer/**", "vae/**"]
   - name: pe_t2i
     repo: Qwen/Qwen-Image-2.1-PE-T2I
     dest: Qwen-Image-2.1-PE-T2I
+    size_gb: 18
   - name: pe_i2i
     repo: Qwen/Qwen-Image-2.1-PE-I2I
     dest: Qwen-Image-2.1-PE-I2I
+    size_gb: 18
 processes:
   - name: studio
     role: main

@@ -1,8 +1,10 @@
 [project]
 name = "qwen-image-2-1"
 version = "0.1.0"
-description = "Add your description here"
+description = "Qwen-Image-2.1 text-to-image and multi-image editing, with its PE prompt enhancers, and a helmstudio web studio"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Janishar Ali", email = "janishar.ali@gmail.com" }
 ]
