@@ -84,9 +84,11 @@ bf16, so beside a local image model only its transformer and small files are new
 ```bash
 hf download Qwen/Qwen-Image-2.1-Turbo --local-dir ~/models/Qwen-Image-2.1-Turbo \
   --include "model_index.json" --include "processor/*" --include "scheduler/*" --include "transformer/*"
-ln -s ../Qwen-Image-2.1/text_encoder ~/models/Qwen-Image-2.1-Turbo/text_encoder
-ln -s ../Qwen-Image-2.1/vae ~/models/Qwen-Image-2.1-Turbo/vae
+cd ~/models/Qwen-Image-2.1-Turbo && for d in text_encoder vae; do mkdir -p $d && ln -s ../../Qwen-Image-2.1/$d/* $d/; done
 ```
+
+Link the files, not the two directories: helmstudio follows a file link anywhere,
+but refuses a directory link that leaves the weight's own folder.
 
 Turbo carries its own 8-step schedule, so `--steps` does nothing with it. It is
 under the [Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo/blob/main/LICENSE),
