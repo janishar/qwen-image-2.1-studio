@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Run qwen image studio on its own under `helm dev`, which keeps what it stores in ./.helm.
 #
-#   [QWEN_MODELS=<dir holding Qwen-Image-2.1, -PE-T2I, -PE-I2I>] [HELM=<helm>] bash web/run.sh [helm dev flags]
+#   [QWEN_MODELS=<dir holding Qwen-Image-2.1, -PE-T2I, -PE-I2I, and optionally -Turbo>] [HELM=<helm>] bash web/run.sh [helm dev flags]
+#
+# Turbo is not linked: the studio finds Qwen-Image-2.1-Turbo beside Qwen-Image-2.1 itself.
 #   bash web/run.sh stop
 #
 # A run first stops the helm dev this script started before, so starting again is a restart.

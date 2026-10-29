@@ -5,6 +5,7 @@ Usage:
     uv run python -m qwen_image_2_1.generate "Edit: sunset" --input photo.png
     uv run python -m qwen_image_2_1.generate "Dragon sticker" --transparent
     uv run qwen-image-2-1 "Prompt" -m ~/models/Qwen-Image-2.1
+    uv run qwen-image-2-1 "Prompt" -m ~/models/Qwen-Image-2.1-Turbo  # 8 steps, its own schedule
     QWEN_IMAGE_21_PATH=~/models/Qwen-Image-2.1 uv run qwen-image-2-1 "Prompt"
     uv run qwen-image-2-1 "a corgi playing guitar in the rain" --enhance
     uv run qwen-image-2-1 "make the sky sunset" --input photo.png --enhance
@@ -119,7 +120,12 @@ def main() -> None:
     )
     parser.add_argument("--width", type=int, help="Override width (multiple of 32)")
     parser.add_argument("--height", type=int, help="Override height (multiple of 32)")
-    parser.add_argument("--steps", type=int, default=40)
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=40,
+        help="Denoising steps (default: %(default)s; Turbo runs the 8-step schedule it ships with)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--transparent", action="store_true", help="Generate an RGBA transparent image"

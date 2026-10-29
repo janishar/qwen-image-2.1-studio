@@ -75,6 +75,8 @@ textarea { resize: vertical; min-height: 112px; }
 .mention[aria-selected="true"], .mention:hover { background: var(--accent-soft); }
 .ref img { cursor: copy; }
 
+#model { width: 100%; margin-bottom: 8px; }
+input:disabled { opacity: 0.55; cursor: not-allowed; }
 .model { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
 .model .glyph { grid-row: span 2; width: 30px; height: 30px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
 .model b { font-weight: 600; }

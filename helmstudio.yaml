@@ -1,7 +1,7 @@
 # qwen image studio's manifest for helmstudio, beside the code it runs.
 id: qwen-image-studio
 name: qwen image studio
-description: Qwen-Image-2.1 text-to-image and multi-image editing on PyTorch (mps), with the PE prompt enhancers.
+description: Qwen-Image-2.1 and its 8-step Turbo for text-to-image and multi-image editing on PyTorch (mps), with the PE prompt enhancers.
 kinds: [image]
 # Teal, at least 30° from helmstudio's accent and every other studio's hue (AuK is violet).
 hue: { dark: "#45c4b0", light: "#1a7f70" }
@@ -38,6 +38,16 @@ weights:
     dest: Qwen-Image-2.1
     size_gb: 31
     files: ["model_index.json", "processor/**", "scheduler/**", "text_encoder/**", "transformer/**", "vae/**"]
+  # The 8-step distilled checkpoint, chosen per render in the page. Optional, so it is not in
+  # the command (an unfetched optional weight refuses any command naming it): the studio looks
+  # for it beside qwen_image, at Qwen-Image-2.1-Turbo, or wherever Paths points.
+  # Its text encoder is the base one and its VAE the base one in bf16; only the transformer is new.
+  - name: turbo
+    repo: Qwen/Qwen-Image-2.1-Turbo
+    dest: Qwen-Image-2.1-Turbo
+    size_gb: 32
+    files: ["model_index.json", "processor/**", "scheduler/**", "text_encoder/**", "transformer/**", "vae/**"]
+    optional: true
   - name: pe_t2i
     repo: Qwen/Qwen-Image-2.1-PE-T2I
     dest: Qwen-Image-2.1-PE-T2I

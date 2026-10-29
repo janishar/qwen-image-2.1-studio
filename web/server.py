@@ -48,6 +48,9 @@ STATIC_DIR = WEB_DIR / "static"
 RATIOS = {"1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"}
 #: The CLI's --device choices (qwen_image_2_1.generate.DEVICES).
 DEVICES = {"auto", "mps", "cuda", "cpu"}
+#: The image models the page offers, by the path key that holds each. Turbo brings its own
+#: 8-step schedule (sample_sigmas in its model_index.json), so it takes no --steps.
+MODELS = {"model": "Qwen-Image-2.1", "turbo": "Qwen-Image-2.1-Turbo"}
 MAX_INPUTS = 10
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -437,7 +440,8 @@ class State:
         settings = job["settings"]
         params = {
             "name": output.name, "prompt": settings["prompt"], "enhanced_prompt": result.get("enhanced_prompt"),
-            "pe_ratio": result.get("pe_ratio"), "seed": settings["seed"], "steps": settings["steps"],
+            "pe_ratio": result.get("pe_ratio"), "seed": settings["seed"],
+            "steps": result.get("steps") or settings["steps"], "model": MODELS[settings.get("model", "model")],
             "width": result["width"], "height": result["height"], "mode": result["mode"],
             "edit": bool(job["inputs"]), "created": job["created"], "elapsed": job["elapsed"], "settings": settings,
         }  # fmt: skip
@@ -543,7 +547,10 @@ def clean_settings(req: dict[str, Any]) -> dict[str, Any]:
     device = req.get("device") or "auto"
     if device not in DEVICES:
         raise ValueError(f"unknown device {device}")
-    settings: dict[str, Any] = {"prompt": prompt, "ratio": ratio, "device": device}
+    model = req.get("model") or "model"
+    if model not in MODELS:
+        raise ValueError(f"unknown model {model}")
+    settings: dict[str, Any] = {"prompt": prompt, "ratio": ratio, "device": device, "model": model}
     for key in ("width", "height"):
         if req.get(key) not in (None, ""):
             value = as_int(req[key], key, 256, 4096)
@@ -608,8 +615,9 @@ class Runner:
         session = state.session_name(req.get("session"))
         settings = clean_settings(req)
         inputs = state.inputs(session)
-        if not (state.paths["model"] and Path(state.paths["model"]).expanduser().is_dir()):
-            raise ValueError("the image model path is not set — choose it under Paths")
+        model = state.paths[settings["model"]]
+        if not (model and Path(model).expanduser().is_dir()):
+            raise ValueError(f"the {MODELS[settings['model']]} path is not set — choose it under Paths")
         pe_key = "pe_i2i" if inputs else "pe_t2i"
         if settings["enhance"] and not Path(state.paths[pe_key] or "/nonexistent").expanduser().is_dir():
             raise ValueError(f"the prompt enhancer path ({pe_key}) is not set — choose it under Paths")
@@ -617,9 +625,10 @@ class Runner:
         output = state.stage / "takes" / f"take-{datetime.now():%m%d-%H%M%S}-{job_id[:4]}.png"
         output.parent.mkdir(parents=True, exist_ok=True)
         prompt = resolve_mentions(settings["prompt"], [i["name"] for i in inputs])
-        argv = [prompt, "-m", os.path.expanduser(state.paths["model"]), "--output", str(output),
-                "--steps", str(settings["steps"]), "--seed", str(settings["seed"]),
-                "--device", settings["device"]]  # fmt: skip
+        argv = [prompt, "-m", os.path.expanduser(model), "--output", str(output),
+                "--seed", str(settings["seed"]), "--device", settings["device"]]  # fmt: skip
+        if settings["model"] != "turbo":
+            argv += ["--steps", str(settings["steps"])]
         if settings["ratio"]:
             argv += ["--ratio", settings["ratio"]]
         for key in ("width", "height"):
@@ -742,6 +751,7 @@ class Runner:
             return True
         if m := STEP_RE.match(text):
             progress.update(step=int(m[1]), total=int(m[2]))
+            result["steps"] = progress["total"]  # outlives the next stage's reset, for the take
             return True
         if m := ENHANCED_RE.match(text):
             with contextlib.suppress(json.JSONDecodeError):
@@ -924,6 +934,8 @@ def main() -> None:
     env = os.environ.get
     parser = argparse.ArgumentParser(description="qwen image studio")
     parser.add_argument("--model", default=env("QWEN_IMAGE_21_PATH", ""), help="Qwen-Image-2.1 directory")
+    parser.add_argument("--turbo", default=env("QWEN_IMAGE_21_TURBO_PATH", ""),
+                        help="Qwen-Image-2.1-Turbo directory (default: Qwen-Image-2.1-Turbo beside --model)")  # fmt: skip
     parser.add_argument("--pe-t2i", default=env("QWEN_IMAGE_21_PE_T2I_PATH", ""), help="PE-T2I directory")
     parser.add_argument("--pe-i2i", default=env("QWEN_IMAGE_21_PE_I2I_PATH", ""), help="PE-I2I directory")
     parser.add_argument("--host", default="127.0.0.1")
@@ -933,7 +945,11 @@ def main() -> None:
 
     if not env("HELM_API"):
         sys.exit("qwen image studio: start it from helmstudio, or with `bash web/run.sh` (helm dev)")
-    state = State({"model": args.model, "pe_t2i": args.pe_t2i, "pe_i2i": args.pe_i2i}, from_env(), Proxy.from_env())
+    # Turbo is an optional weight, and helmstudio refuses a command naming one that is not fetched,
+    # so the manifest does not pass it: it is looked for beside the base model instead.
+    turbo = args.turbo or (str(Path(args.model).expanduser().parent / MODELS["turbo"]) if args.model else "")
+    paths = {"model": args.model, "turbo": turbo, "pe_t2i": args.pe_t2i, "pe_i2i": args.pe_i2i}
+    state = State(paths, from_env(), Proxy.from_env())
     Handler.state, Handler.runner = state, Runner(state)
     Handler.allowed_hosts = {h.strip().lower() for h in [args.host, *args.allow_host.split(",")] if h.strip()}
     print(f"qwen image studio on http://{args.host}:{args.port}", flush=True)

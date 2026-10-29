@@ -277,8 +277,8 @@ nvtx = [
 
 [[package]]
 name = "diffusers"
-version = "0.41.0.dev0"
-source = { git = "https://github.com/huggingface/diffusers#cc8644b447d8f11074d3df06d0ee0e3e7c91bf75" }
+version = "0.42.0.dev0"
+source = { git = "https://github.com/huggingface/diffusers#d0b9b1b5a540e5f9df2f8ec236347bf9c5aa7d1f" }
 dependencies = [
     { name = "filelock" },
     { name = "huggingface-hub" },

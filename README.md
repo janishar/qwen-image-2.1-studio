@@ -60,25 +60,41 @@ uv sync
 
 ## Weights
 
-Three repositories. Only the image model is needed; the two enhancers are for
-`--enhance`.
+Four repositories. Only the image model is needed; Turbo is an optional faster
+model, and the two enhancers are for `--enhance`.
 
 | Weight | Hugging Face | Disk | Used for |
 | --- | --- | --- | --- |
 | Image model | [`Qwen/Qwen-Image-2.1`](https://huggingface.co/Qwen/Qwen-Image-2.1) | ~30 GB | every render |
+| Turbo | [`Qwen/Qwen-Image-2.1-Turbo`](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo) | ~14 GB beside the image model | 8-step renders, when chosen as the model |
 | PE-T2I | [`Qwen/Qwen-Image-2.1-PE-T2I`](https://huggingface.co/Qwen/Qwen-Image-2.1-PE-T2I) | ~18 GB | `--enhance` without reference images |
 | PE-I2I | [`Qwen/Qwen-Image-2.1-PE-I2I`](https://huggingface.co/Qwen/Qwen-Image-2.1-PE-I2I) | ~18 GB | `--enhance` with reference images |
 
 ```bash
-hf download Qwen/Qwen-Image-2.1 \
-  --include "model_index.json" "processor/*" "scheduler/*" "text_encoder/*" "transformer/*" "vae/*" \
-  --local-dir ~/models/Qwen-Image-2.1
+hf download Qwen/Qwen-Image-2.1 --local-dir ~/models/Qwen-Image-2.1 \
+  --include "model_index.json" --include "processor/*" --include "scheduler/*" \
+  --include "text_encoder/*" --include "transformer/*" --include "vae/*"
 hf download Qwen/Qwen-Image-2.1-PE-T2I --local-dir ~/models/Qwen-Image-2.1-PE-T2I
 hf download Qwen/Qwen-Image-2.1-PE-I2I --local-dir ~/models/Qwen-Image-2.1-PE-I2I
 ```
 
+Turbo's text encoder is the image model's, and its VAE is the image model's in
+bf16, so beside a local image model only its transformer and small files are new:
+
+```bash
+hf download Qwen/Qwen-Image-2.1-Turbo --local-dir ~/models/Qwen-Image-2.1-Turbo \
+  --include "model_index.json" --include "processor/*" --include "scheduler/*" --include "transformer/*"
+ln -s ../Qwen-Image-2.1/text_encoder ~/models/Qwen-Image-2.1-Turbo/text_encoder
+ln -s ../Qwen-Image-2.1/vae ~/models/Qwen-Image-2.1-Turbo/vae
+```
+
+Turbo carries its own 8-step schedule, so `--steps` does nothing with it. It is
+under the [Qwen Research License](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo/blob/main/LICENSE),
+not the image model's.
+
 Without a local copy the CLI downloads from the Hub into the HF cache. Installed
-through the launcher, helmstudio downloads all three itself.
+through the launcher, helmstudio downloads the image model and the enhancers
+itself, and Turbo when you fetch it.
 
 ## The studio
 
@@ -252,10 +268,10 @@ uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
 | `--input` | *(none)* | Reference images for editing, comma-separated, at most 10. |
 | `--ratio` | `1:1`, or the last input's aspect | `1:1`, `4:3`, `3:4`, `3:2`, `2:3`, `16:9`, `9:16`. |
 | `--width`, `--height` | from the ratio | Override one side; a multiple of 32. |
-| `--steps` | `40` | Denoising steps. |
+| `--steps` | `40` | Denoising steps. Turbo ignores it and runs its own 8. |
 | `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. For an edit it is mixed with the inputs' pixels, so editing a take with the seed it was made with does not start from the noise that made it. |
 | `--transparent` | off | Ask for an RGBA image with a transparent background. |
-| `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id. |
+| `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id; a Turbo directory for 8-step renders. |
 | `--enhance` | off | Rewrite the prompt, and choose the ratio, with PE-T2I / PE-I2I first. |
 | `--think` | off | With `--enhance`: let the enhancer reason before answering. |
 | `--pe-model` | `$QWEN_IMAGE_21_PE_{T2I,I2I}_PATH`, else the Hub | Enhancer directory or Hub id. |
@@ -271,6 +287,7 @@ studio to read: `@stage enhance|load|denoise|decode|save`, `@step 12/40`, and
 | Variable | Used as |
 | --- | --- |
 | `QWEN_IMAGE_21_PATH` | `--model` |
+| `QWEN_IMAGE_21_TURBO_PATH` | the studio's Turbo directory (default: `Qwen-Image-2.1-Turbo` beside the image model) |
 | `QWEN_IMAGE_21_PE_T2I_PATH`, `QWEN_IMAGE_21_PE_I2I_PATH` | `--pe-model`, by mode |
 | `QWEN_IMAGE_21_DEVICE` | `--device` |
 | `QWEN_MODELS` | `web/run.sh`: the directory holding the three weights |

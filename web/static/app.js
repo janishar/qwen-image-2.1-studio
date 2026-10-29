@@ -11,7 +11,9 @@ const RATIOS = {
 const STAGES = [
   ["enhance", "Enhance"], ["load", "Load"], ["denoise", "Denoise"], ["decode", "Decode"], ["save", "Save"],
 ];
-const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent", "device"];
+const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent", "device", "model"];
+// The image models by path key (web/server.py MODELS). Turbo brings its own 8-step schedule.
+const MODELS = { model: { name: "Qwen-Image-2.1", glyph: "2.1" }, turbo: { name: "Qwen-Image-2.1-Turbo", glyph: "T", steps: 8 } };
 
 const ui = {
   session: "", paths: {}, ratio: null, inputs: [], takes: [], queue: [],
@@ -85,17 +87,34 @@ function settings() {
   const num = (id) => ($(id).value === "" ? null : Number($(id).value));
   return {
     prompt: $("prompt").value, ratio: ui.ratio, width: num("width"), height: num("height"),
-    steps: num("steps") ?? 40, seed: num("seed") ?? 42,
+    // A fixed-schedule model shows its own step count; the steps chosen for the other one are kept.
+    steps: $("steps").disabled ? Number($("steps").dataset.keep) || 40 : num("steps") ?? 40, seed: num("seed") ?? 42,
     enhance: $("enhance").checked, think: $("think").checked, transparent: $("transparent").checked,
-    device: $("device").value,
+    device: $("device").value, model: $("model").value,
   };
+}
+
+/** Lock Steps to the model's own schedule while one with a fixed schedule is chosen. */
+function syncSteps() {
+  const fixed = MODELS[$("model").value].steps;
+  if (!!fixed === $("steps").disabled) return;
+  if (fixed) {
+    $("steps").dataset.keep = $("steps").value;
+    $("steps").value = fixed;
+  } else {
+    $("steps").value = $("steps").dataset.keep || 40;
+  }
+  $("steps").disabled = !!fixed;
+  $("steps").title = fixed ? `${MODELS[$("model").value].name} uses its own ${fixed}-step schedule` : "";
 }
 
 function applySettings(s) {
   $("prompt").value = s.prompt ?? "";
   $("width").value = s.width ?? "";
   $("height").value = s.height ?? "";
+  $("steps").disabled = false;
   $("steps").value = s.steps ?? 40;
+  $("model").value = MODELS[s.model] ? s.model : "model";
   $("seed").value = s.seed ?? 42;
   for (const flag of ["enhance", "think", "transparent"]) $(flag).checked = !!s[flag];
   $("device").value = s.device || "auto";
@@ -130,6 +149,8 @@ function plannedSize() {
 }
 
 function update() {
+  syncSteps();
+  renderModel();
   const edit = ui.inputs.length > 0;
   for (const span of $("modeSeg").children) span.classList.toggle("on", (span.dataset.m === "i2i") === edit);
   $("modeSeg").lastElementChild.textContent = edit ? `Edit · ${ui.inputs.length} image${ui.inputs.length > 1 ? "s" : ""}` : "Edit";
@@ -170,11 +191,12 @@ function renderCommand() {
   const tagged = resolveMentions(s.prompt);
   const p = tagged.length > 40 ? `${tagged.slice(0, 40)}…` : tagged;
   const parts = [`<span class="k">qwen-image-2-1</span> ${escapeHtml(quote(p || "…"))}`];
+  if (s.model !== "model") parts.push(`-m ${escapeHtml(quote(ui.paths[s.model]?.path || MODELS[s.model].name))}`);
   if (ui.inputs.length) parts.push(`--input ${escapeHtml(ui.inputs.map((i) => i.name).join(","))}`);
   if (s.ratio) parts.push(`--ratio ${s.ratio}`);
   if (s.width) parts.push(`--width ${s.width}`);
   if (s.height) parts.push(`--height ${s.height}`);
-  if (s.steps !== 40) parts.push(`--steps ${s.steps}`);
+  if (s.steps !== 40 && !MODELS[s.model].steps) parts.push(`--steps ${s.steps}`);
   if (s.seed !== 42) parts.push(`--seed ${s.seed}`);
   if (s.enhance) parts.push("--enhance");
   if (s.enhance && s.think) parts.push("--think");
@@ -324,6 +346,7 @@ function renderTakes() {
       el("img", { src: take.thumb, alt: "", loading: "lazy" }),
       el("div", { class: "flags" },
         el("b", { text: p.edit ? "EDIT" : "T2I" }),
+        p.settings?.model === "turbo" && el("b", { text: "TURBO" }),
         p.enhanced_prompt && el("b", { text: "PE" }),
         p.settings?.transparent && el("b", { text: "RGBA" })),
       el("div", { class: "acts" },
@@ -352,7 +375,7 @@ function showTake() {
   $("frame").style.setProperty("--r", String(p.width / p.height));
   $("stageTitle").textContent = p.name || take.id;
   $("stageRatio").textContent = `${p.width}×${p.height}`;
-  $("frameBadge").textContent = `seed ${p.seed} · ${p.steps} steps · ${p.mode}${p.elapsed ? ` · ${Math.round(p.elapsed)}s` : ""}`;
+  $("frameBadge").textContent = `${p.settings?.model === "turbo" ? "Turbo · " : ""}seed ${p.seed} · ${p.steps} steps · ${p.mode}${p.elapsed ? ` · ${Math.round(p.elapsed)}s` : ""}`;
   showEnhanced(p.enhanced_prompt ? { prompt: p.prompt, enhanced: p.enhanced_prompt, ratio: p.pe_ratio } : null);
 }
 
@@ -502,13 +525,22 @@ async function openSession(name, settingsOverride) {
 
 function renderPaths(paths) {
   ui.paths = paths;
-  $("modelPath").textContent = paths.model.path || "not set";
-  $("modelBad").hidden = paths.model.ok;
+  renderModel();
+}
+
+/** The chosen model's card: its name, its directory, and whether that is there. */
+function renderModel() {
+  const key = $("model").value;
+  const path = ui.paths[key] || {};
+  $("modelName").textContent = MODELS[key].name;
+  $("modelGlyph").textContent = MODELS[key].glyph;
+  $("modelPath").textContent = path.path || "not set — choose it under Paths";
+  $("modelBad").hidden = !!path.ok;
 }
 
 async function savePaths() {
   try {
-    renderPaths(await api("/api/paths", { paths: { model: $("pModel").value, pe_t2i: $("pT2I").value, pe_i2i: $("pI2I").value } }));
+    renderPaths(await api("/api/paths", { paths: { model: $("pModel").value, turbo: $("pTurbo").value, pe_t2i: $("pT2I").value, pe_i2i: $("pI2I").value } }));
     $("pathsDialog").close();
   } catch (err) {
     showError($("pathsError"), err);
@@ -622,6 +654,7 @@ function wire() {
 
   $("pathsBtn").addEventListener("click", () => {
     $("pModel").value = ui.paths.model?.path || "";
+    $("pTurbo").value = ui.paths.turbo?.path || "";
     $("pT2I").value = ui.paths.pe_t2i?.path || "";
     $("pI2I").value = ui.paths.pe_i2i?.path || "";
     showError($("pathsError"), null);

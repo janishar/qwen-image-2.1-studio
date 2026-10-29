@@ -33,10 +33,14 @@ import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(
     <!-- LEFT: parameters -->
     <aside class="panel" aria-label="Parameters">
       <section>
-        <div class="label">Model</div>
+        <label class="label" for="model">Model</label>
+        <select id="model">
+          <option value="model">Qwen-Image-2.1 — 40 steps</option>
+          <option value="turbo">Qwen-Image-2.1-Turbo — 8 steps</option>
+        </select>
         <div class="model">
-          <div class="glyph">2.1</div>
-          <b>Qwen-Image-2.1 <span class="bad" id="modelBad" hidden>not found</span></b>
+          <div class="glyph" id="modelGlyph">2.1</div>
+          <b><span id="modelName">Qwen-Image-2.1</span> <span class="bad" id="modelBad" hidden>not found</span></b>
           <code id="modelPath">—</code>
         </div>
         <div class="device-row">
@@ -192,9 +196,10 @@ import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(
 <dialog id="pathsDialog">
   <h3>Paths</h3>
   <div class="field"><label class="label" for="pModel">Image model</label><input type="text" id="pModel" autocomplete="off"></div>
+  <div class="field"><label class="label" for="pTurbo">Image model · Turbo</label><input type="text" id="pTurbo" autocomplete="off"></div>
   <div class="field"><label class="label" for="pT2I">Enhancer · text → image</label><input type="text" id="pT2I" autocomplete="off"></div>
   <div class="field"><label class="label" for="pI2I">Enhancer · edit</label><input type="text" id="pI2I" autocomplete="off"></div>
-  <p class="hint">Directories on this Mac. helmstudio sets them from the weights it installed; a path here wins.</p>
+  <p class="hint">Directories on this Mac. helmstudio sets them from the weights it installed; a path here wins. Turbo is looked for beside the image model.</p>
   <p class="errors" id="pathsError" hidden></p>
   <div class="acts"><button class="btn" type="button" id="pathsCancel">Cancel</button><button class="primary" type="button" id="pathsSave">Use paths</button></div>
 </dialog>
