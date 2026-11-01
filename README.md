@@ -313,7 +313,8 @@ anything but loopback is on you. The terminal is output only, never a shell.
 - **Load** has no progress of its own: its bar jumps from nothing to done.
 - A load has once hung in safetensors' parallel loader, all threads idle; the
   same command went through on retry. Cancel and render again.
-- `peak_ram_gb` in `helmstudio.yaml` is an estimate, not a measurement.
+- `peak_ram_gb` in `helmstudio.yaml` is measured at 2048×2048 with one reference
+  image, and the peak is the VAE decode. More references add to it.
 - CUDA and CPU are untested; `helmstudio.yaml` still requires an Apple Silicon
   Mac, so only the CLI runs elsewhere.
 

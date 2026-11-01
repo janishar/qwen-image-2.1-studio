@@ -8,9 +8,11 @@ hue: { dark: "#45c4b0", light: "#1a7f70" }
 license: MIT
 repo: https://github.com/janishar/qwen-image-2.1-studio
 python: { version: "3.12" }
-# An estimate, not measured: ~30 GB of bf16 weights (transformer 13, text encoder 16, VAE 1.3)
-# plus activations at 2048x2048. The 9B enhancer is freed before the image model loads.
-peak_ram_gb: 60
+# Measured at 2048x2048 with one reference image: 69 GB of Metal memory, in the VAE decode.
+# Loading holds 31 (bf16 weights: transformer 13, text encoder 16, VAE 1.3) and denoising 21,
+# because the text encoder is freed once the prompt is encoded and the 9B enhancer before the
+# image model loads. More references add to it.
+peak_ram_gb: 69
 requires:
   os: [darwin]
   arch: [arm64]
