@@ -165,7 +165,8 @@ Write a prompt, press **Generate**. The left pane is every CLI flag:
 - **Prompt enhancer** — **Enhance prompt** and **Let it think**.
 - **Aspect ratio** — *Auto* or one of the seven, with the size it will render;
   **Width** and **Height** override it.
-- **Steps**, **Seed** (⚄ for a random one) and **Transparent background**.
+- **Steps**, **Seed** (⚄ for a random one), **Transparent background** and
+  **Tiled decode**.
 - Under **Generate**, the command it will run.
 
 The centre shows the take with its seed, steps and size, the five stages of the
@@ -274,6 +275,7 @@ uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
 | `--steps` | `40` | Denoising steps. Turbo ignores it and runs its own 8. |
 | `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. For an edit it is mixed with the inputs' pixels, so editing a take with the seed it was made with does not start from the noise that made it. |
 | `--transparent` | off | Ask for an RGBA image with a transparent background. |
+| `--tiled` | off | Decode in 1024 px tiles: about 27 GB instead of 65 at 4 MP, no slower. Pixels differ slightly from a whole decode, so a seed does not repeat a take made without it. |
 | `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id; a Turbo directory for 8-step renders. |
 | `--enhance` | off | Rewrite the prompt, and choose the ratio, with PE-T2I / PE-I2I first. |
 | `--think` | off | With `--enhance`: let the enhancer reason before answering. |

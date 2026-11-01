@@ -114,6 +114,11 @@ import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(
           <b>Transparent background <span class="tag">RGBA</span></b>
           <em>Asks for an alpha channel; the take is always saved as PNG.</em>
         </label>
+        <label class="toggle" for="tiled">
+          <input type="checkbox" id="tiled">
+          <b>Tiled decode <span class="tag">Saves memory</span></b>
+          <em>Decodes in tiles: about 27 GB instead of 65 at 4 MP. Pixels differ slightly from a whole decode, so a seed won't repeat a take made without it.</em>
+        </label>
       </section>
 
       <section>

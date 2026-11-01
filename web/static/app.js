@@ -11,7 +11,7 @@ const RATIOS = {
 const STAGES = [
   ["enhance", "Enhance"], ["load", "Load"], ["denoise", "Denoise"], ["decode", "Decode"], ["save", "Save"],
 ];
-const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent", "device", "model"];
+const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent", "tiled", "device", "model"];
 // The image models by path key (web/server.py MODELS). Turbo brings its own 8-step schedule.
 const MODELS = { model: { name: "Qwen-Image-2.1", glyph: "2.1" }, turbo: { name: "Qwen-Image-2.1-Turbo", glyph: "T", steps: 8 } };
 
@@ -90,7 +90,7 @@ function settings() {
     // A fixed-schedule model shows its own step count; the steps chosen for the other one are kept.
     steps: $("steps").disabled ? Number($("steps").dataset.keep) || 40 : num("steps") ?? 40, seed: num("seed") ?? 42,
     enhance: $("enhance").checked, think: $("think").checked, transparent: $("transparent").checked,
-    device: $("device").value, model: $("model").value,
+    tiled: $("tiled").checked, device: $("device").value, model: $("model").value,
   };
 }
 
@@ -116,7 +116,7 @@ function applySettings(s) {
   $("steps").value = s.steps ?? 40;
   $("model").value = MODELS[s.model] ? s.model : "model";
   $("seed").value = s.seed ?? 42;
-  for (const flag of ["enhance", "think", "transparent"]) $(flag).checked = !!s[flag];
+  for (const flag of ["enhance", "think", "transparent", "tiled"]) $(flag).checked = !!s[flag];
   $("device").value = s.device || "auto";
   ui.ratio = s.ratio || null;
   update();
@@ -201,6 +201,7 @@ function renderCommand() {
   if (s.enhance) parts.push("--enhance");
   if (s.enhance && s.think) parts.push("--think");
   if (s.transparent) parts.push("--transparent");
+  if (s.tiled) parts.push("--tiled");
   if (s.device !== "auto") parts.push(`--device ${s.device}`);
   $("cmd").innerHTML = parts.join(" \\\n  ");
 }

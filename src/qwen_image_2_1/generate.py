@@ -118,6 +118,14 @@ def on_step_end(pipe, i: int, t, kwargs: dict) -> dict:
     return kwargs
 
 
+def on_step_end_tiled(pipe, i: int, t, kwargs: dict) -> dict:
+    # Only now: tiling also applies to the VAE's encoder, and an edit's references were encoded whole.
+    # 1024 px tiles, 768 apart: measured at 4 MP, 27 GB against 65 for a whole decode, no slower and no visible seam
+    if i + 1 == pipe._num_timesteps:
+        pipe.vae.enable_tiling(1024, 1024, 768, 768)
+    return on_step_end(pipe, i, t, kwargs)
+
+
 ASPECT_RATIOS = {
     "1:1": (2048, 2048),
     "4:3": (2400, 1792),
@@ -149,6 +157,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--transparent", action="store_true", help="Generate an RGBA transparent image"
+    )
+    parser.add_argument(
+        "--tiled",
+        action="store_true",
+        help="Decode the image in tiles: far less memory at 4 MP, pixels differ slightly",
     )
     parser.add_argument(
         "-m",
@@ -249,7 +262,7 @@ def main() -> None:
         generator=torch.Generator(device="cpu").manual_seed(
             noise_seed(args.seed, images)
         ),
-        callback_on_step_end=on_step_end,
+        callback_on_step_end=on_step_end_tiled if args.tiled else on_step_end,
     ).images[
         0
     ]  # pyright: ignore[reportAttributeAccessIssue]
