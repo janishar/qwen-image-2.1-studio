@@ -105,14 +105,20 @@ def free_text_encoder_after_encoding(pipe, device: str) -> None:
     pipe.encode_prompt = encode_and_free
 
 
+def marker(line: str) -> None:
+    # a line the studio UI reads. tqdm leaves its bar unterminated on the same pipe, so end it first:
+    # \r keeps it a bar the log rewrites, \n gives this line its own start
+    print(f"\r\n{line}", flush=True)
+
+
 def stage(name: str) -> None:
     # machine-readable marker for the studio UI: enhance, load, denoise, decode, save
-    print(f"@stage {name}", flush=True)
+    marker(f"@stage {name}")
 
 
 def on_step_end(pipe, i: int, t, kwargs: dict) -> dict:
     n = pipe._num_timesteps
-    print(f"@step {i + 1}/{n}", flush=True)
+    marker(f"@step {i + 1}/{n}")
     if i + 1 == n:  # the pipeline decodes the latents right after the last step
         stage("decode")
     return kwargs
@@ -234,9 +240,7 @@ def main() -> None:
             prompt, images, pe_model, args.seed, args.think, device
         )
         print(f"Enhanced prompt ({pe_ratio or 'ratio from input'}):\n{prompt}\n")
-        print(
-            f"@enhanced {json.dumps({'prompt': prompt, 'ratio': pe_ratio})}", flush=True
-        )
+        marker(f"@enhanced {json.dumps({'prompt': prompt, 'ratio': pe_ratio})}")
 
     ratio = args.ratio or pe_ratio or (None if args.input else "1:1")
     width, height = ASPECT_RATIOS[ratio] if ratio else (None, None)
@@ -277,7 +281,7 @@ def main() -> None:
         out_path = out_path.with_suffix(".png")
         print(f"Could not save {args.output} ({e}); saving PNG instead")
         out.save(out_path)
-    print(f"Saved {out_path.resolve()} ({out.size[0]}x{out.size[1]}, mode={out.mode})")
+    marker(f"Saved {out_path.resolve()} ({out.size[0]}x{out.size[1]}, mode={out.mode})")
 
 
 if __name__ == "__main__":
