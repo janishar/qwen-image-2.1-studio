@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -83,6 +84,25 @@ def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat
 
     # device_map loads each weight straight to the GPU instead of building a full CPU copy first
     return QwenImage21Pipeline.from_pretrained(model, dtype=dtype, device_map=device)
+
+
+def free_text_encoder_after_encoding(pipe, device: str) -> None:
+    """Drop the text encoder as soon as the prompt is encoded: the 16 GB stay on the device through denoising otherwise.
+
+    pipe() encodes then denoises in one call, and each render is its own process, so nothing needs it again.
+    """
+    # ponytail: wraps encode_prompt, because __call__ has no image_pad_mask to take precomputed embeds for an edit;
+    # a negative prompt would encode twice and need the encoder kept until the second call
+    encode_prompt = pipe.encode_prompt
+
+    def encode_and_free(*args, **kwargs):
+        out = encode_prompt(*args, **kwargs)
+        pipe.text_encoder = None
+        gc.collect()
+        empty_cache(device)
+        return out
+
+    pipe.encode_prompt = encode_and_free
 
 
 def stage(name: str) -> None:
@@ -216,6 +236,7 @@ def main() -> None:
 
     stage("load")
     pipe = load_pipe(args.model, device)
+    free_text_encoder_after_encoding(pipe, device)
 
     stage("denoise")
 

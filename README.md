@@ -42,8 +42,9 @@ it shares with the other studios. The CLI needs none of that.
 macOS on Apple Silicon with **64 GB** of unified memory is what this is built
 and tested on. The image model is ~30 GB of bf16 weights (transformer 13 GB,
 text encoder 16 GB, VAE 1.3 GB); the 9B enhancer is freed before it loads, so
-the two never sit in memory together. `--device cuda` and `--device cpu` exist
-for other machines, untested here — see [Device](#device).
+the two never sit in memory together, and the text encoder is freed once the
+prompt is encoded, so denoising runs without it. `--device cuda` and
+`--device cpu` exist for other machines, untested here — see [Device](#device).
 
 ### Toolchain
 
