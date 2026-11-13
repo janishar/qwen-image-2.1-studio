@@ -119,6 +119,11 @@ import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(
           <b>Tiled decode <span class="tag">Saves memory</span></b>
           <em>Decodes in tiles: about 27 GB instead of 65 at 4 MP. Pixels differ slightly from a whole decode, so a seed won't repeat a take made without it.</em>
         </label>
+        <label class="toggle" for="int8">
+          <input type="checkbox" id="int8">
+          <b>int8 weights <span class="tag">Saves memory</span></b>
+          <em>Loads the transformer and text encoder as int8: 17 GB instead of 31, about as fast. Pixels differ slightly from bf16, so a seed won't repeat a bf16 take.</em>
+        </label>
       </section>
 
       <section>

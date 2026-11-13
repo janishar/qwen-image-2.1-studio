@@ -79,11 +79,50 @@ def noise_seed(seed: int, images: list[Image.Image] | None) -> int:
     return int.from_bytes(digest.digest()[:8], "big") >> 1
 
 
-def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat16):
+def load_pipe(model: str, device: str = "mps", dtype: torch.dtype = torch.bfloat16, int8: bool = False):
     from diffusers import QwenImage21Pipeline  # type: ignore[import-not-found]
 
-    # device_map loads each weight straight to the GPU instead of building a full CPU copy first
-    return QwenImage21Pipeline.from_pretrained(model, dtype=dtype, device_map=device)
+    if not int8:
+        # device_map loads each weight straight to the GPU instead of building a full CPU copy first
+        return QwenImage21Pipeline.from_pretrained(model, dtype=dtype, device_map=device)
+    model_dir = Path(model)
+    if not model_dir.is_dir():  # a Hub id: the int8 loader reads the safetensors itself
+        from huggingface_hub import snapshot_download
+
+        model_dir = Path(snapshot_download(model, allow_patterns=[
+            "model_index.json", "processor/*", "scheduler/*", "text_encoder/*", "transformer/*", "vae/*"]))  # fmt: skip
+    return QwenImage21Pipeline.from_pretrained(
+        model_dir, transformer=load_int8_transformer(model_dir, device),
+        text_encoder=load_int8_text_encoder(model_dir, device), dtype=dtype, device_map=device,
+    )  # fmt: skip
+
+
+def load_int8_transformer(model_dir: Path, device: str):
+    """The transformer with its 32 blocks int8 (7.0B of its 7.1B); the embedders and output layers stay bf16."""
+    from accelerate import init_empty_weights
+    from diffusers import QwenImage21Transformer2DModel  # type: ignore[import-not-found]
+
+    from qwen_image_2_1.int8 import load_int8, shards
+
+    sub = model_dir / "transformer"
+    with init_empty_weights(include_buffers=False):
+        model = QwenImage21Transformer2DModel.from_config(QwenImage21Transformer2DModel.load_config(sub))
+    return load_int8(model, shards(sub), device, quantize=lambda name, _: name.startswith("transformer_blocks."))
+
+
+def load_int8_text_encoder(model_dir: Path, device: str):
+    """The text encoder with its decoder layers and lm_head int8; the vision tower, which reads an edit's
+    references, and the embeddings stay bf16."""
+    from accelerate import init_empty_weights
+    from transformers import AutoConfig, Qwen3VLForConditionalGeneration
+
+    from qwen_image_2_1.int8 import load_int8, shards
+
+    sub = model_dir / "text_encoder"
+    with init_empty_weights(include_buffers=False):
+        model = Qwen3VLForConditionalGeneration(AutoConfig.from_pretrained(sub))
+    quantize = lambda name, _: ".language_model.layers." in name or name == "lm_head"  # noqa: E731
+    return load_int8(model, shards(sub), device, quantize=quantize)
 
 
 def free_text_encoder_after_encoding(pipe, device: str) -> None:
@@ -193,6 +232,11 @@ def main() -> None:
         "--transparent", action="store_true", help="Generate an RGBA transparent image"
     )
     parser.add_argument(
+        "--int8",
+        action="store_true",
+        help="Load the transformer and text encoder as int8 weights: about half the memory, pixels differ slightly",
+    )
+    parser.add_argument(
         "--tiled",
         action="store_true",
         help="Decode the image in tiles: far less memory at 4 MP, pixels differ slightly",
@@ -279,7 +323,7 @@ def main() -> None:
         )
 
     stage("load")
-    pipe = load_pipe(args.model, device)
+    pipe = load_pipe(args.model, device, int8=args.int8)
     free_text_encoder_after_encoding(pipe, device)
 
     stage("denoise")

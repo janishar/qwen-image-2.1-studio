@@ -563,7 +563,7 @@ def clean_settings(req: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("a free size needs both width and height")
     settings["steps"] = as_int(req.get("steps", 40), "steps", 1, 200)
     settings["seed"] = as_int(req.get("seed", 42), "seed", 0, 2**63 - 1)
-    for flag in ("enhance", "think", "transparent", "tiled"):
+    for flag in ("enhance", "think", "transparent", "tiled", "int8"):
         settings[flag] = bool(req.get(flag))
     settings["think"] = settings["think"] and settings["enhance"]
     return settings
@@ -638,7 +638,7 @@ class Runner:
         for key in ("width", "height"):
             if key in settings:
                 argv += [f"--{key}", str(settings[key])]
-        for flag in ("enhance", "think", "transparent", "tiled"):
+        for flag in ("enhance", "think", "transparent", "tiled", "int8"):
             if settings[flag]:
                 argv.append(f"--{flag}")
         if settings["enhance"]:

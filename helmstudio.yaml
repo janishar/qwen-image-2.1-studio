@@ -21,7 +21,7 @@ requires:
 runtime:
   framework: pytorch
   backends: [mps, cuda, cpu]
-  precision: [bf16]
+  precision: [bf16, int8]
   language: python
 # Sessions keep their settings and reference images (kv for the page's paths);
 # references and takes are assets; takes with their settings are gallery items;

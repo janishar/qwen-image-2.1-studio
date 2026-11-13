@@ -43,8 +43,10 @@ macOS on Apple Silicon with **64 GB** of unified memory is what this is built
 and tested on. The image model is ~30 GB of bf16 weights (transformer 13 GB,
 text encoder 16 GB, VAE 1.3 GB); the 9B enhancer is freed before it loads, so
 the two never sit in memory together, and the text encoder is freed once the
-prompt is encoded, so denoising runs without it. `--device cuda` and
-`--device cpu` exist for other machines, untested here — see [Device](#device).
+prompt is encoded, so denoising runs without it. `--int8` loads the transformer
+and text encoder as int8 instead, about half of that — see [int8 weights](#int8-weights).
+`--device cuda` and `--device cpu` exist for other machines, untested here — see
+[Device](#device).
 
 ### Toolchain
 
@@ -167,8 +169,8 @@ Write a prompt, press **Generate**. The left pane is every CLI flag:
   render. Type a **Width** or a **Height** and the other side follows the ratio
   (shown in italics, still editable — typing there makes it the side that leads);
   with *Free*, both are yours.
-- **Steps**, **Seed** (⚄ for a random one), **Transparent background** and
-  **Tiled decode**.
+- **Steps**, **Seed** (⚄ for a random one), **Transparent background**,
+  **Tiled decode** and **int8 weights**.
 - Under **Generate**, the command it will run.
 
 The centre shows the take with its seed, steps and size, the five stages of the
@@ -256,6 +258,23 @@ uv run qwen-image-2-1 "put the mug from <image1> under the neon sign from <image
   --input mug.jpg,neon-sign.png --enhance
 ```
 
+### int8 weights
+
+`--int8` (**int8 weights** in the studio) loads the transformer's 32 blocks and
+the text encoder's decoder layers as int8, one scale per output row, quantized
+on the GPU as the bf16 files stream in — nothing extra is written to disk. The
+embedders, output layers and the text encoder's vision tower stay bf16. Measured
+with Turbo at 2048×2048, seed 7, tiled decode:
+
+| | Loaded | Peak | Time |
+| --- | --- | --- | --- |
+| bf16 | 31.1 GB | 31.1 GB | 161 s |
+| `--int8` | 17.2 GB | 22.1 GB | 166 s |
+
+The two takes match in composition and lettering; pixels differ by 5.6/255 on
+average (PSNR 22 dB), the drift any weight change gives over the denoising
+steps. Without `--tiled` the whole-image decode is still the peak, int8 or not.
+
 ### Device
 
 `--device auto` (the default) runs on MPS, else CUDA, else CPU. `mps`, `cuda` and
@@ -280,6 +299,7 @@ uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
 | `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. For an edit it is mixed with the inputs' pixels, so editing a take with the seed it was made with does not start from the noise that made it. |
 | `--transparent` | off | Ask for an RGBA image with a transparent background. |
 | `--tiled` | off | Decode in 1024 px tiles: about 27 GB instead of 65 at 4 MP, no slower. Pixels differ slightly from a whole decode, so a seed does not repeat a take made without it. |
+| `--int8` | off | Load the transformer and text encoder as int8 weights: 17 GB loaded instead of 31, about as fast. Pixels differ slightly from bf16, so a seed does not repeat a bf16 take. |
 | `-m`, `--model` | `$QWEN_IMAGE_21_PATH`, else `Qwen/Qwen-Image-2.1` | Local directory or Hub id; a Turbo directory for 8-step renders. |
 | `--enhance` | off | Rewrite the prompt, and choose the ratio, with PE-T2I / PE-I2I first. |
 | `--think` | off | With `--enhance`: let the enhancer reason before answering. |

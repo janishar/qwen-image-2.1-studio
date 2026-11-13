@@ -11,7 +11,7 @@ const RATIOS = {
 const STAGES = [
   ["enhance", "Enhance"], ["load", "Load"], ["denoise", "Denoise"], ["decode", "Decode"], ["save", "Save"],
 ];
-const FIELDS = ["prompt", "steps", "seed", "enhance", "think", "transparent", "tiled", "device", "model"]; // width and height are wired on their own
+const FIELDS = ["prompt", "steps", "seed", "enhance", "think", "transparent", "tiled", "int8", "device", "model"]; // width and height are wired on their own
 // The image models by path key (web/server.py MODELS). Turbo brings its own 8-step schedule.
 const MODELS = { model: { name: "Qwen-Image-2.1", glyph: "2.1" }, turbo: { name: "Qwen-Image-2.1-Turbo", glyph: "T", steps: 8 } };
 
@@ -101,7 +101,7 @@ function settings() {
     // A fixed-schedule model shows its own step count; the steps chosen for the other one are kept.
     steps: $("steps").disabled ? Number($("steps").dataset.keep) || 40 : num("steps") ?? 40, seed: num("seed") ?? 42,
     enhance: $("enhance").checked, think: $("think").checked, transparent: $("transparent").checked,
-    tiled: $("tiled").checked, device: $("device").value, model: $("model").value,
+    tiled: $("tiled").checked, int8: $("int8").checked, device: $("device").value, model: $("model").value,
   };
 }
 
@@ -135,7 +135,7 @@ function applySettings(s) {
   $("steps").value = s.steps ?? 40;
   $("model").value = MODELS[s.model] ? s.model : "model";
   $("seed").value = s.seed ?? 42;
-  for (const flag of ["enhance", "think", "transparent", "tiled"]) $(flag).checked = !!s[flag];
+  for (const flag of ["enhance", "think", "transparent", "tiled", "int8"]) $(flag).checked = !!s[flag];
   $("device").value = s.device || "auto";
   ui.ratio = free ? "free" : s.ratio || null;
   update();
@@ -252,6 +252,7 @@ function renderCommand() {
   if (s.enhance && s.think) parts.push("--think");
   if (s.transparent) parts.push("--transparent");
   if (s.tiled) parts.push("--tiled");
+  if (s.int8) parts.push("--int8");
   if (s.device !== "auto") parts.push(`--device ${s.device}`);
   $("cmd").innerHTML = parts.join(" \\\n  ");
 }
@@ -399,7 +400,8 @@ function renderTakes() {
         el("b", { text: p.edit ? "EDIT" : "T2I" }),
         p.settings?.model === "turbo" && el("b", { text: "TURBO" }),
         p.enhanced_prompt && el("b", { text: "PE" }),
-        p.settings?.transparent && el("b", { text: "RGBA" })),
+        p.settings?.transparent && el("b", { text: "RGBA" }),
+        p.settings?.int8 && el("b", { text: "INT8" })),
       el("div", { class: "acts" },
         act("Use as reference", "↩", useTake), act("Reuse settings", "⟲", reuseTake), act("Delete", "✕", deleteTake))),
     el("div", { class: "meta" }, `seed ${p.seed} · ${p.width}×${p.height}`, el("span", { text: p.prompt || "" })));
@@ -426,7 +428,7 @@ function showTake() {
   $("frame").style.setProperty("--r", String(p.width / p.height));
   $("stageTitle").textContent = p.name || take.id;
   $("stageRatio").textContent = `${p.width}×${p.height}`;
-  $("frameBadge").textContent = `${p.settings?.model === "turbo" ? "Turbo · " : ""}seed ${p.seed} · ${p.steps} steps · ${p.mode}${p.elapsed ? ` · ${Math.round(p.elapsed)}s` : ""}`;
+  $("frameBadge").textContent = `${p.settings?.model === "turbo" ? "Turbo · " : ""}${p.settings?.int8 ? "int8 · " : ""}seed ${p.seed} · ${p.steps} steps · ${p.mode}${p.elapsed ? ` · ${Math.round(p.elapsed)}s` : ""}`;
   showEnhanced(p.enhanced_prompt ? { prompt: p.prompt, enhanced: p.enhanced_prompt, ratio: p.pe_ratio } : null);
 }
 
@@ -487,6 +489,7 @@ function renderQueue() {
 function renderPipeline() {
   const job = ui.live;
   const enhance = job ? !!job.argv_display?.includes("--enhance") : $("enhance").checked;
+  const int8 = job ? !!job.argv_display?.includes("--int8") : $("int8").checked; // the running job's, not the form's
   const at = job ? STAGES.findIndex(([key]) => key === job.progress.stage) : -1;
   const steps = job?.progress.total || $("steps").value || 40;
   $("pipeline").replaceChildren(...STAGES.map(([key, name], i) => {
@@ -499,7 +502,7 @@ function renderPipeline() {
       cls = "now";
       width = key === "denoise" && job.progress.total ? (100 * job.progress.step) / job.progress.total : 35;
     }
-    const sub = { enhance: ui.inputs.length ? "PE-I2I 9B" : "PE-T2I 9B", load: `bf16 · ${($("device").value === "auto" ? "auto" : $("device").value).toUpperCase()}`, denoise: `${steps} steps`, decode: "VAE", save: "PNG" }[key];
+    const sub = { enhance: ui.inputs.length ? "PE-I2I 9B" : "PE-T2I 9B", load: `${int8 ? "int8" : "bf16"} · ${($("device").value === "auto" ? "auto" : $("device").value).toUpperCase()}`, denoise: `${steps} steps`, decode: "VAE", save: "PNG" }[key];
     return el("div", { class: `stepc ${cls}` },
       el("div", { class: "bar" }, el("i", { style: width === null ? null : `width:${width}%` })), name, el("small", { text: sub }));
   }));
