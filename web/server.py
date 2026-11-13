@@ -557,6 +557,10 @@ def clean_settings(req: dict[str, Any]) -> dict[str, Any]:
             if value % 32:
                 raise ValueError(f"{key} must be a multiple of 32")
             settings[key] = value
+    # Free: both sides exactly as given. Otherwise a side left empty follows the ratio (the CLI's rule).
+    settings["free"] = bool(req.get("free"))
+    if settings["free"] and not ("width" in settings and "height" in settings):
+        raise ValueError("a free size needs both width and height")
     settings["steps"] = as_int(req.get("steps", 40), "steps", 1, 200)
     settings["seed"] = as_int(req.get("seed", 42), "seed", 0, 2**63 - 1)
     for flag in ("enhance", "think", "transparent", "tiled"):

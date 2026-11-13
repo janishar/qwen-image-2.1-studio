@@ -143,6 +143,34 @@ ASPECT_RATIOS = {
 }
 
 
+def side(pixels: float) -> int:
+    """A side in whole multiples of 32, within the studio's 256-4096."""
+    return min(max(round(pixels / 32) * 32, 256), 4096)
+
+
+def plan_size(
+    ratio: str | None, last_input: Image.Image | None, width: int | None, height: int | None
+) -> tuple[int | None, int | None]:
+    """The size to ask the pipeline for.
+
+    Both sides given: exactly that (a free size). One side: the other follows the aspect, `ratio`'s
+    or, in an edit with none, the last input's. Neither: `ratio`'s size, or (None, None) for an
+    edit, which the pipeline sizes itself at about 1 MP in the last input's aspect.
+    """
+    if width and height:
+        return width, height
+    if ratio:
+        w, h = map(int, ratio.split(":"))
+        aspect = w / h
+    else:
+        aspect = last_input.width / last_input.height
+    if width:
+        return width, side(width / aspect)
+    if height:
+        return side(height * aspect), height
+    return ASPECT_RATIOS[ratio] if ratio else (None, None)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Qwen-Image-2.1 generation")
     parser.add_argument("prompt", help="Text prompt")
@@ -152,8 +180,8 @@ def main() -> None:
         choices=ASPECT_RATIOS,
         help="Output aspect ratio (default: 1:1, or the input image's aspect with --input)",
     )
-    parser.add_argument("--width", type=int, help="Override width (multiple of 32)")
-    parser.add_argument("--height", type=int, help="Override height (multiple of 32)")
+    parser.add_argument("--width", type=int, help="Width (multiple of 32); alone, the height follows the ratio")
+    parser.add_argument("--height", type=int, help="Height (multiple of 32); alone, the width follows the ratio")
     parser.add_argument(
         "--steps",
         type=int,
@@ -243,8 +271,7 @@ def main() -> None:
         marker(f"@enhanced {json.dumps({'prompt': prompt, 'ratio': pe_ratio})}")
 
     ratio = args.ratio or pe_ratio or (None if args.input else "1:1")
-    width, height = ASPECT_RATIOS[ratio] if ratio else (None, None)
-    width, height = args.width or width, args.height or height
+    width, height = plan_size(ratio, images[-1] if images else None, args.width, args.height)
     if args.transparent:
         prompt = (
             "This is an RGBA image with transparency. "

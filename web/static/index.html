@@ -97,7 +97,7 @@ import("/helm/sdk/v1/helm-runtime.js").then((helm) => helm.themeBridge()).catch(
           <label for="width"><span class="label">Width</span><input type="number" id="width" step="32" min="256" max="4096" placeholder="auto"></label>
           <label for="height"><span class="label">Height</span><input type="number" id="height" step="32" min="256" max="4096" placeholder="auto"></label>
         </div>
-        <p class="hint">Overrides the ratio. Multiples of 32; leave empty to follow the ratio.</p>
+        <p class="hint">Set one side and the other follows the ratio; pick Free to set both. Multiples of 32.</p>
       </section>
 
       <section class="grid2">

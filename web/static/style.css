@@ -234,3 +234,6 @@ dialog .acts .primary { width: auto; padding: 6px 14px; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+.ratio.free i { border-style: dotted; }
+/* the side worked out from the ratio, not typed */
+input.derived { color: var(--muted); font-style: italic; }

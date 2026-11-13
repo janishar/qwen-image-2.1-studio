@@ -11,12 +11,14 @@ const RATIOS = {
 const STAGES = [
   ["enhance", "Enhance"], ["load", "Load"], ["denoise", "Denoise"], ["decode", "Decode"], ["save", "Save"],
 ];
-const FIELDS = ["prompt", "width", "height", "steps", "seed", "enhance", "think", "transparent", "tiled", "device", "model"];
+const FIELDS = ["prompt", "steps", "seed", "enhance", "think", "transparent", "tiled", "device", "model"]; // width and height are wired on their own
 // The image models by path key (web/server.py MODELS). Turbo brings its own 8-step schedule.
 const MODELS = { model: { name: "Qwen-Image-2.1", glyph: "2.1" }, turbo: { name: "Qwen-Image-2.1-Turbo", glyph: "T", steps: 8 } };
 
 const ui = {
-  session: "", paths: {}, ratio: null, inputs: [], takes: [], queue: [],
+  session: "", paths: {}, inputs: [], takes: [], queue: [],
+  ratio: null, // null for Auto, a RATIOS key, or "free"
+  side: null, // "width" or "height": the side typed, which the other follows by the ratio (not in Free)
   selected: null, // gallery item id of the take in the preview
   live: null, // the running job's summary, for the stage bar
 };
@@ -46,7 +48,13 @@ async function api(path, body) {
 }
 
 const q = (path) => `${path}?session=${encodeURIComponent(ui.session)}`;
-const snap32 = (v) => Math.round(v / 32) * 32;
+// Python's round(): half to even.
+const pyRound = (x) => { const r = Math.round(x); return Math.abs(x % 1) === 0.5 && r % 2 ? r - 1 : r; };
+// To a multiple of 32 as the pipeline's calculate_dimensions does, with Python's round.
+const snap32 = (v) => pyRound(v / 32) * 32;
+/** qwen_image_2_1.generate.side: a side in multiples of 32, within 256-4096. */
+const sideOf = (px) => Math.min(Math.max(pyRound(px / 32) * 32, 256), 4096);
+const ratioOf = (key) => { const [w, h] = key.split(":").map(Number); return w / h; };
 
 function showError(node, err) {
   node.textContent = err ? err.message || String(err) : "";
@@ -85,8 +93,11 @@ function ask({ title, message = "", value = null, ok = "OK" }) {
 // ── the form ────────────────────────────────────────────────────────────
 function settings() {
   const num = (id) => ($(id).value === "" ? null : Number($(id).value));
+  const free = ui.ratio === "free";
   return {
-    prompt: $("prompt").value, ratio: ui.ratio, width: num("width"), height: num("height"),
+    prompt: $("prompt").value, ratio: free ? null : ui.ratio, free,
+    // Only the typed side goes to the CLI, which works the other out by the same rule.
+    width: free || ui.side === "width" ? num("width") : null, height: free || ui.side === "height" ? num("height") : null,
     // A fixed-schedule model shows its own step count; the steps chosen for the other one are kept.
     steps: $("steps").disabled ? Number($("steps").dataset.keep) || 40 : num("steps") ?? 40, seed: num("seed") ?? 42,
     enhance: $("enhance").checked, think: $("think").checked, transparent: $("transparent").checked,
@@ -109,43 +120,55 @@ function syncSteps() {
 }
 
 function applySettings(s) {
+  // Saved before Free existed, a typed side never followed the ratio: both sides were an exact size,
+  // and one side kept the preset's other. Either is that same size as Free now.
+  if (s.free === undefined && (s.width || s.height) && ((s.width && s.height) || RATIOS[s.ratio])) {
+    const [w, h] = RATIOS[s.ratio] || [];
+    s = { ...s, free: true, ratio: null, width: s.width || w, height: s.height || h };
+  }
   $("prompt").value = s.prompt ?? "";
   $("width").value = s.width ?? "";
   $("height").value = s.height ?? "";
+  const free = !!s.free;
+  ui.side = free ? null : s.width ? "width" : s.height ? "height" : null;
   $("steps").disabled = false;
   $("steps").value = s.steps ?? 40;
   $("model").value = MODELS[s.model] ? s.model : "model";
   $("seed").value = s.seed ?? 42;
   for (const flag of ["enhance", "think", "transparent", "tiled"]) $(flag).checked = !!s[flag];
   $("device").value = s.device || "auto";
-  ui.ratio = s.ratio || null;
+  ui.ratio = free ? "free" : s.ratio || null;
   update();
 }
 
-/** What size the CLI will render, mirroring generate.py and the pipeline's own default. */
+/** What size the CLI will render, mirroring generate.plan_size and the pipeline's own default. */
 function plannedSize() {
   const s = settings();
+  if (s.free) return { w: s.width, h: s.height, source: "free size" };
   let base = null;
+  let r = null; // unknown until the enhancer picks it
   let source;
   if (s.ratio) {
     base = RATIOS[s.ratio];
+    r = ratioOf(s.ratio);
     source = "chosen";
   } else if (s.enhance) {
-    source = "picked by the enhancer";
+    source = "auto · picked by the enhancer";
   } else if (ui.inputs.length) {
     // pipeline_qwenimage21: output_resolution² at the last image's aspect, snapped to 32
     const last = ui.inputs[ui.inputs.length - 1];
-    const r = (last.width || 1) / (last.height || 1);
+    r = (last.width || 1) / (last.height || 1);
     const w = Math.sqrt(1024 * 1024 * r);
     base = [snap32(w), snap32(w / r)];
-    source = "follows the last image";
+    source = "auto · follows the last image";
   } else {
     base = RATIOS["1:1"];
-    source = "default 1:1";
+    r = 1;
+    source = "auto · default 1:1";
   }
-  const w = s.width || (base && base[0]);
-  const h = s.height || (base && base[1]);
-  return { w, h, source };
+  if (s.width) return { w: s.width, h: r && sideOf(s.width / r), source };
+  if (s.height) return { w: r && sideOf(s.height * r), h: s.height, source };
+  return { w: base && base[0], h: base && base[1], source };
 }
 
 function update() {
@@ -161,12 +184,25 @@ function update() {
   $("refCount").textContent = `${ui.inputs.length}/10`;
 
   const { w, h, source } = plannedSize();
-  $("ratioSrc").textContent = ui.ratio ? "chosen" : `auto · ${source}`;
+  $("ratioSrc").textContent = source;
   $("dims").textContent = w && h ? `${w} × ${h}` : "—";
   $("mp").textContent = w && h ? ((w * h) / 1e6).toFixed(2) : "—";
+  // The side not typed shows what it will be, and stays editable: typing there makes it the one that leads.
+  const free = ui.ratio === "free";
+  const follower = !free && ui.side ? (ui.side === "width" ? "height" : "width") : null;
+  for (const id of ["width", "height"]) {
+    $(id).classList.toggle("derived", id === follower);
+    $(id).placeholder = free ? "required" : "auto";
+  }
+  if (follower) {
+    const v = follower === "width" ? w : h;
+    $(follower).value = v ?? "";
+    if (!v) $(follower).placeholder = "from the enhancer's ratio";
+  }
+  const missing = free && !(w && h);
   const ok = (!w || w % 32 === 0) && (!h || h % 32 === 0);
-  $("grid32").textContent = ok ? "ok" : "not a multiple";
-  $("grid32").classList.toggle("warn", !ok);
+  $("grid32").textContent = missing ? "set both" : ok ? "ok" : "not a multiple";
+  $("grid32").classList.toggle("warn", missing || !ok);
   renderRatios();
   renderRefs();
   renderCommand();
@@ -174,13 +210,27 @@ function update() {
 }
 
 function renderRatios() {
-  const options = [[null, "Auto"], ...Object.keys(RATIOS).map((k) => [k, k])];
+  const options = [[null, "Auto"], ...Object.keys(RATIOS).map((k) => [k, k]), ["free", "Free"]];
   $("ratios").replaceChildren(...options.map(([key, label]) => {
-    const [w, h] = key ? RATIOS[key] : [1, 1];
+    const [w, h] = key && key !== "free" ? RATIOS[key] : key ? [4, 3] : [1, 1];
     const s = 22 / Math.max(w, h);
     return el("button", {
-      type: "button", class: `ratio${key ? "" : " auto"}`, "aria-pressed": String(ui.ratio === key),
-      onclick: () => { ui.ratio = key; update(); saveSoon(); },
+      type: "button", class: `ratio${key ? (key === "free" ? " free" : "") : " auto"}`, "aria-pressed": String(ui.ratio === key),
+      title: key === "free" ? "Set width and height yourself" : null,
+      onclick: () => {
+        // Into Free, the size on show becomes both sides, typed or not; out of it, the width leads.
+        if (key === "free") {
+          const { w: shownW, h: shownH } = plannedSize();
+          if (!$("width").value && shownW) $("width").value = shownW;
+          if (!$("height").value && shownH) $("height").value = shownH;
+          ui.side = null;
+        } else if (ui.ratio === "free") {
+          ui.side = $("width").value ? "width" : $("height").value ? "height" : null;
+        }
+        ui.ratio = key;
+        update();
+        saveSoon();
+      },
     }, el("i", { style: `width:${Math.round(w * s)}px;height:${Math.round(h * s)}px` }), label);
   }));
 }
@@ -404,7 +454,10 @@ async function useTake(take) {
 }
 
 function reuseTake(take) {
-  applySettings(take.params.settings || take.params);
+  const s = take.params.settings || take.params;
+  // A take from before Free with a typed side: its rendered size, which that side alone may not give now.
+  const old = s.free === undefined && (s.width || s.height) && take.params.width && take.params.height;
+  applySettings(old ? { ...s, free: true, ratio: null, width: take.params.width, height: take.params.height } : s);
   saveSoon();
 }
 
@@ -595,6 +648,16 @@ async function connectHelm() {
 // ── wiring ──────────────────────────────────────────────────────────────
 function wire() {
   for (const id of FIELDS) $(id).addEventListener("input", () => { update(); saveSoon(); });
+  for (const id of ["width", "height"]) {
+    $(id).addEventListener("input", () => {
+      if (ui.ratio !== "free") {
+        ui.side = $(id).value === "" ? null : id; // the side typed leads
+        if (!ui.side) $(id === "width" ? "height" : "width").value = ""; // cleared: both follow the ratio again
+      }
+      update();
+      saveSoon();
+    });
+  }
   $("prompt").addEventListener("input", () => { mention.at = 0; renderMentions(); });
   $("prompt").addEventListener("keydown", onMentionKey);
   $("prompt").addEventListener("click", renderMentions);

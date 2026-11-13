@@ -163,8 +163,10 @@ Write a prompt, press **Generate**. The left pane is every CLI flag:
   is written as `@name` and sent as `<imageN>` by the image's place in the list,
   so removing another image never breaks it.
 - **Prompt enhancer** — **Enhance prompt** and **Let it think**.
-- **Aspect ratio** — *Auto* or one of the seven, with the size it will render;
-  **Width** and **Height** override it.
+- **Aspect ratio** — *Auto*, one of the seven, or *Free*, with the size it will
+  render. Type a **Width** or a **Height** and the other side follows the ratio
+  (shown in italics, still editable — typing there makes it the side that leads);
+  with *Free*, both are yours.
 - **Steps**, **Seed** (⚄ for a random one), **Transparent background** and
   **Tiled decode**.
 - Under **Generate**, the command it will run.
@@ -222,8 +224,10 @@ uv run qwen-image-2-1 "A bookshelf in warm oak" --width 1024 --height 768 --step
 ```
 
 Sizes come from the aspect ratio, at about 4 MP: `1:1` is 2048×2048, `16:9`
-2752×1536, and so on through `4:3`, `3:4`, `3:2`, `2:3` and `9:16`. `--width` and
-`--height` override either side and must be multiples of 32.
+2752×1536, and so on through `4:3`, `3:4`, `3:2`, `2:3` and `9:16`. Give one of
+`--width` or `--height` and the other follows the ratio — or, in an edit with no
+ratio, the last input's aspect; give both for an exact size. Multiples of 32,
+256–4096.
 
 ### Prompt enhancer
 
@@ -271,7 +275,7 @@ uv run qwen-image-2-1 "A neon shop sign that reads QWEN" --device cuda
 | `prompt` | *(required)* | The text prompt. |
 | `--input` | *(none)* | Reference images for editing, comma-separated, at most 10. |
 | `--ratio` | `1:1`, or the last input's aspect | `1:1`, `4:3`, `3:4`, `3:2`, `2:3`, `16:9`, `9:16`. |
-| `--width`, `--height` | from the ratio | Override one side; a multiple of 32. |
+| `--width`, `--height` | from the ratio | One: the other side follows the ratio. Both: exactly that size. Multiples of 32, 256–4096. |
 | `--steps` | `40` | Denoising steps. Turbo ignores it and runs its own 8. |
 | `--seed` | `42` | Seed for the CPU generator, so a seed repeats across devices. For an edit it is mixed with the inputs' pixels, so editing a take with the seed it was made with does not start from the noise that made it. |
 | `--transparent` | off | Ask for an RGBA image with a transparent background. |
